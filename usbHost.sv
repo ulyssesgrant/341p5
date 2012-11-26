@@ -11,6 +11,8 @@ module usbHost
   // sends an OUT packet with ADDR=5 and ENDP=4
   // packet should have SYNC and EOP too
   (input bit  [15:0] data);
+
+  logic [10:0] token = 11'b0000101_0100;
     
   endtask: prelabRequest
 
@@ -33,12 +35,18 @@ module usbHost
   endtask: writeData
 
   // usbHost starts here!!
-logic nrzi_in, nrzi_out,clear;
-logic stuffer_in, stuffer_out,pause;
+logic nrzi_in, nrzi_out,clear, wiresDP, wiresDM;
+logic stuffer_in, stuffer_out, pause, crc_in, crc_out;
 
-/*
-CRC5 here?
-*/
+
+//implement enable_send as output of protocol_fsm
+assign wires.DP = enable_send ? wiresDP : 1'bz;
+assign wires.DM = enable_send ? wiresDM : 1'bz;
+
+//CRC5 here!
+sender crcSender(crc_in, rst_L, clk, pause, crc_out);
+//for now: crcSender's output is tied to bitstuffer's input, but should implement mux with crc16's output later!
+assign stuffer_in = crc_out;
 
 ///////////////////////////////////////////////////////////////
 stuffer   bitstuff(stuffer_in, rst_l, stuffer_out, pause);  // stuff addr, endp,crc5,crc16, and DATA
@@ -55,10 +63,10 @@ nrzi    flip(nrzi_in, start, rst_l, clear, nrzi_out);
   // small handler to send out DP and DM. use do_eop to control between NRZI output and EOP.
  logic [2:0] counter_dpdm; 
 always_comb begin   // sending DP and DM
-  if(do_eop) {wires.DP,wires.DM} = 2'b00;                             // deal with EOP
-  else if (counter_dpdm == 3'd1) {wires.DP,wires.DM} = 2'b00;
-  else if (counter_dpdm == 3'd2) {wires.DP,wires.DM} = 2'b10;
-  else {wires.DP,wires.DM} = {nrzi_out,~nrzi_out};                 // go back to output from NRZI
+  if(do_eop) {wiresDP,wiresDM} = 2'b00;                             // deal with EOP
+  else if (counter_dpdm == 3'd1) {wiresDP,wiresDM} = 2'b00;
+  else if (counter_dpdm == 3'd2) {wiresDP,wiresDM} = 2'b10;
+  else {wiresDP,wiresDM} = {nrzi_out,~nrzi_out};                 // go back to output from NRZI
 end
 always_ff @(posedge clk, negedge rst_l) begin
 	if(~rst_l) counter_dpdm <= 3'd0;
@@ -228,11 +236,4 @@ always_ff @(posedge clk, negedge rst_l) begin
 	else past <= bit_out;
 	end				  
 endmodule
-
-
-
-
-
-
-
 
