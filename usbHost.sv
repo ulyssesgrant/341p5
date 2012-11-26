@@ -55,10 +55,10 @@ nrzi    flip(nrzi_in, start, rst_l, clear, nrzi_out);
   // small handler to send out DP and DM. use do_eop to control between NRZI output and EOP.
  logic [2:0] counter_dpdm; 
 always_comb begin   // sending DP and DM
-  if(do_eop) {wires.DP,wire.DM} = 2'b00;                             // deal with EOP
-  else if (counter_dpdm == 3'd1) {wires.DP,wire.DM} = 2'b00;
-  else if (counter_dpdm == 3'd2) {wires.DP,wire.DM} = 2'b10;
-  else {wires.DP,wire.DM} = {nrzi_out,~nrzi_out};                 // go back to output from NRZI
+  if(do_eop) {wires.DP,wires.DM} = 2'b00;                             // deal with EOP
+  else if (counter_dpdm == 3'd1) {wires.DP,wires.DM} = 2'b00;
+  else if (counter_dpdm == 3'd2) {wires.DP,wires.DM} = 2'b10;
+  else {wires.DP,wires.DM} = {nrzi_out,~nrzi_out};                 // go back to output from NRZI
 end
 always_ff @(posedge clk, negedge rst_l) begin
 	if(~rst_l) counter_dpdm <= 3'd0;
