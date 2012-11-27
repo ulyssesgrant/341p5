@@ -19,15 +19,14 @@ module usbHost
   ld_sync = 1;
   ld_pid = 1;
   ld_tok = 1;
+  sel_1 = 1;
+  sel_2 = 0;
   @(posedge clk);
   ld_sync = 0;
   ld_pid = 0;
   ld_tok = 0;
-  sel_1 = 1;
-  sel_2 = 0;
 
   //begin sending sync
-  @(posedge clk);
   en_sync = 1;
   repeat (7) @(posedge clk);
 
