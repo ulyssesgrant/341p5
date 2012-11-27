@@ -21,6 +21,7 @@ module usbHost
   usbHost.en_crc <= 0;
   usbHost.en_pid <= 0;
   usbHost.en_tok <= 0;
+  usbHost.clear <= 1;
 
   usbHost.ld_sync <= 1;
   usbHost.ld_pid <= 1;
@@ -29,6 +30,8 @@ module usbHost
   usbHost.sel_2 <= 0;
   @(posedge clk);
   usbHost.enable_send <= 1;
+  usbHost.clear <= 0;
+  usbHost.en_sync <= 1;
   usbHost.ld_sync <= 0;
   usbHost.ld_pid <= 0;
   usbHost.ld_tok <= 0;
@@ -319,19 +322,17 @@ module shiftRegister
 	 output logic out);
 
 	logic [w-1:0] val;
+	assign out = val[w-1];
 
 	always_ff @(posedge clk, negedge rst_L) begin
 		if (~rst_L) begin
 			val <= 'd0;
-			out <= 1'b0;
 		end
 		else if (ld) begin
 			val <= in;
-			out <= val[w-1];
 		end
 		else if (en && !pause) begin
 			val <= val << 1;
-			out <= val[w-1];
 		end
 	end
 endmodule: shiftRegister
