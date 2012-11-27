@@ -62,10 +62,13 @@ module usbHost
   repeat (5) @(posedge clk);
 
   //begin sending eop
+  @(posedge clk);
   usbHost.do_eop <= 1;
-  repeat (3) @(posedge clk);
+  repeat (2) @(posedge clk);
+  usbHost.do_eop <= 0;
+  @(posedge clk);
   
-  //usbHost.enable_send <= 0;
+  usbHost.enable_send <= 0;
 
   endtask: prelabRequest
 
