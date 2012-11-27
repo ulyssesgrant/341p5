@@ -110,10 +110,10 @@ assign stuffer_in = crc_out;
 shiftRegister #(11) shiftRegToken(clk, rst_L, ld_tok, en_tok, pause, token, crc_in);
 
 //shift register to hold sync
-shiftRegister #(8) shiftRegSync(clk, rst_L, ld_sync, en_sync, pause, sync, sync_out);
+shiftRegister #(8) shiftRegSync(clk, rst_L, ld_sync, en_sync, 1'd0, sync, sync_out);
 
 //shift register to hold pid
-shiftRegister #(8) shiftRegPid(clk, rst_L, ld_pid, en_pid, pause, pid, pid_out);
+shiftRegister #(8) shiftRegPid(clk, rst_L, ld_pid, en_pid, 1'd0, pid, pid_out);
 
 
 ///////////////////////////////////////////////////////////////
