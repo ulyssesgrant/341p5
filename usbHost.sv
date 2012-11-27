@@ -45,17 +45,18 @@ module usbHost
   usbHost.en_sync <= 0;
   usbHost.sel_1 <= 0;
   usbHost.en_pid <= 1;
-  repeat (8) @(posedge clk);
+  repeat (7) @(posedge clk);
+  usbHost.en_crc_L <= 0;
+  @(posedge clk);
   usbHost.en_pid <= 0;
   usbHost.sel_2 <= 1;
 
   //begin sending crc
-  usbHost.en_crc_L <= 0;
-  @(posedge clk);
   usbHost.en_crc_L <= 1;
-  @(posedge clk);
   usbHost.en_tok <= 1;
-  repeat (10) @(posedge clk);
+  @(posedge clk);
+  //usbHost.en_crc_L <= 1;
+  repeat (9) @(posedge clk);
   usbHost.en_tok <= 0;
   //5 more clock cycles for crc remainder
   repeat (5) @(posedge clk);
