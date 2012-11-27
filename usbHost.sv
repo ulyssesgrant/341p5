@@ -18,7 +18,7 @@ module usbHost
 
   usbHost.do_eop <= 0;
   usbHost.en_sync <= 0;
-  usbHost.en_crc <= 0;
+  usbHost.en_crc_L <= 1;
   usbHost.en_pid <= 0;
   usbHost.en_tok <= 0;
   usbHost.clear <= 1;
@@ -45,15 +45,14 @@ module usbHost
   usbHost.en_sync <= 0;
   usbHost.sel_1 <= 0;
   usbHost.en_pid <= 1;
-  //@(posedge clk);
   repeat (8) @(posedge clk);
   usbHost.en_pid <= 0;
   usbHost.sel_2 <= 1;
 
   //begin sending crc
-  usbHost.en_crc <= 1;
+  usbHost.en_crc_L <= 0;
   @(posedge clk);
-  usbHost.en_crc <= 0;
+  usbHost.en_crc_L <= 1;
   @(posedge clk);
   usbHost.en_tok <= 1;
   repeat (10) @(posedge clk);
@@ -65,7 +64,7 @@ module usbHost
   usbHost.do_eop <= 1;
   repeat (3) @(posedge clk);
   
-  usbHost.enable_send <= 0;
+  //usbHost.enable_send <= 0;
 
   endtask: prelabRequest
 
@@ -90,7 +89,7 @@ module usbHost
 
   // usbHost starts here!!
 logic nrzi_in, nrzi_out, clear, start, wiresDP, wiresDM;
-logic stuffer_in, stuffer_out, pause, crc_in, crc_out, en_crc, sync_out, pid_out, sync_pid_out;
+logic stuffer_in, stuffer_out, pause, crc_in, crc_out, en_crc_L, sync_out, pid_out, sync_pid_out;
 logic ld_tok, en_tok, ld_sync, en_sync, ld_pid, en_pid, enable_send, do_eop;
 logic sel_1, sel_2;
 logic [10:0] sr_in, token;
@@ -102,7 +101,7 @@ assign wires.DP = enable_send ? wiresDP : 1'bz;
 assign wires.DM = enable_send ? wiresDM : 1'bz;
 
 //CRC5 here!
-sender crcSender(crc_in, (rst_L||en_crc), clk, pause, crc_out);
+sender crcSender(crc_in, (rst_L&&en_crc_L), clk, pause, crc_out);
 //for now: crcSender's output is tied to bitstuffer's input, but should implement mux with crc16's output later!
 assign stuffer_in = crc_out;
 
