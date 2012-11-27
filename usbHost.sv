@@ -12,47 +12,47 @@ module usbHost
   // packet should have SYNC and EOP too
   (input bit  [15:0] data);
 
-  logic [10:0] token = 11'b0010_1010000;
-  logic [7:0] sync = 8'b0000_0001;
-  logic [7:0] pid = 8'b0111_1000;
+  usbHost.token = 11'b0010_1010000;
+  usbHost.sync = 8'b0000_0001;
+  usbHost.pid = 8'b0111_1000;
 
-  ld_sync = 1;
-  ld_pid = 1;
-  ld_tok = 1;
-  sel_1 = 1;
-  sel_2 = 0;
-  enable_send = 1;
+  usbHost.ld_sync = 1;
+  usbHost.ld_pid = 1;
+  usbHost.ld_tok = 1;
+  usbHost.sel_1 = 1;
+  usbHost.sel_2 = 0;
+  usbHost.enable_send = 1;
   @(posedge clk);
-  ld_sync = 0;
-  ld_pid = 0;
-  ld_tok = 0;
+  usbHost.ld_sync = 0;
+  usbHost.ld_pid = 0;
+  usbHost.ld_tok = 0;
 
   //begin sending sync
-  en_sync = 1;
+  usbHost.en_sync = 1;
   repeat (7) @(posedge clk);
 
   //begin sending pid_~pid
-  en_sync = 0;
-  sel_1 = 0;
+  usbHost.en_sync = 0;
+  usbHost.sel_1 = 0;
   @(posedge clk);
-  en_pid = 1;
+  usbHost.en_pid = 1;
   repeat (7) @(posedge clk);
-  en_pid = 0;
-  sel_2 = 1;
+  usbHost.en_pid = 0;
+  usbHost.sel_2 = 1;
 
   //begin sending crc
-  en_crc = 1;
+  usbHost.en_crc = 1;
   @(posedge clk);
-  en_crc = 0;
+  usbHost.en_crc = 0;
   @(posedge clk);
-  en_tok = 1;
+  usbHost.en_tok = 1;
   repeat (10) @(posedge clk);
-  en_tok = 0;
+  usbHost.en_tok = 0;
   //5 more clock cycles for crc remainder
   repeat (5) @(posedge clk);
 
   //begin sending eop
-  do_eop = 1;
+  usbHost.do_eop = 1;
   repeat (3) @(posedge clk);
 
   endtask: prelabRequest
@@ -77,10 +77,12 @@ module usbHost
   endtask: writeData
 
   // usbHost starts here!!
-logic nrzi_in, nrzi_out,clear, wiresDP, wiresDM;
+logic nrzi_in, nrzi_out, clear, start, wiresDP, wiresDM;
 logic stuffer_in, stuffer_out, pause, crc_in, crc_out, en_crc, sync_out, pid_out, sync_pid_out;
-logic ld_tok, en_tok, ld_sync, en_sync, ld_pid, en_pid;
-logic [10:0] sr_in;
+logic ld_tok, en_tok, ld_sync, en_sync, ld_pid, en_pid, enable_send, do_eop;
+logic sel_1, sel_2;
+logic [10:0] sr_in, token;
+logic [7:0] sync, pid;
 
 
 //implement enable_send as output of protocol_fsm
@@ -103,7 +105,7 @@ shiftRegister #(8) shiftRegPid(clk, rst_L, ld_pid, en_pid, pause, pid, pid_out);
 
 
 ///////////////////////////////////////////////////////////////
-stuffer   bitstuff(stuffer_in, rst_l, stuffer_out, pause);  // stuff addr, endp,crc5,crc16, and DATA
+stuffer   bitstuff(stuffer_in, clk, rst_L, clear, stuffer_out, pause);  // stuff addr, endp,crc5,crc16, and DATA
 ///////////////////////////////////////////////////////////////
  //mux in sync, pid 
 
@@ -119,7 +121,7 @@ assign nrzi_in = sel_2 ? stuffer_out : sync_pid_out;
   //%%%%%%%%%%%%%%%%%%%%%%%%
   
 ////////////////////////////////////////////////////////////////
-nrzi    flip(nrzi_in, start, rst_l, clear, nrzi_out);  
+nrzi    flip(nrzi_in, start, clk, rst_L, clear, nrzi_out);  
 ////////////////////////////////////////////////////////////////
   // small handler to send out DP and DM. use do_eop to control between NRZI output and EOP.
  logic [2:0] counter_dpdm; 
@@ -129,8 +131,8 @@ always_comb begin   // sending DP and DM
   else if (counter_dpdm == 3'd2) {wiresDP,wiresDM} = 2'b10;
   else {wiresDP,wiresDM} = {nrzi_out,~nrzi_out};                 // go back to output from NRZI
 end
-always_ff @(posedge clk, negedge rst_l) begin
-	if(~rst_l) counter_dpdm <= 3'd0;
+always_ff @(posedge clk, negedge rst_L) begin
+	if(~rst_L) counter_dpdm <= 3'd0;
 	else if( do_eop ) counter_dpdm <= 3'd0;
 	else counter_dpdm <= counter_dpdm +3'd1;
 end
@@ -251,7 +253,7 @@ endmodule: complementMake
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-module stuffer(input logic bit_in, rst_l,
+module stuffer(input logic bit_in, clk, rst_l, clear,
 					 output logic bit_out, pause);  // stuff addr, endp,crc5,crc16, and DATA
 
 	logic [2:0] count;
@@ -280,10 +282,10 @@ endmodule:stuffer
 
 // assume first one is 1;
 
-module nrzi(input logic bit_in, start, rst_L, clear,
+module nrzi(input logic bit_in, start, clk, rst_L, clear,
 				  output logic bit_out);  // everything except EOP
 				  
-logic past, clear;
+logic past;
 always_comb begin
 
 if(bit_in) bit_out = past;  // input is 1, don't invert
@@ -307,9 +309,10 @@ module shiftRegister
 	logic [w-1:0] val;
 
 	always_ff @(posedge clk, negedge rst_L) begin
-		if (rst)
-			val <= w'd0;
+		if (rst_L) begin
+			val <= 'd0;
 			out <= 1'b0;
+		end
 		else if (ld) begin
 			val <= in;
 			out <= val[w-1];
