@@ -58,12 +58,6 @@ module usbHost
   endtask: prelabRequest
 
 
-assign sync_pid_out = sel_1 ? sync_out : pid_out;
-
-//mux for NRZI
-assign nrzi_in = sel_2 ? stuffer_out : sync_pid_out;
-
-
   task readData
   // host sends memPage to thumb drive and then gets data back from it
   // then returns data and status to the caller
