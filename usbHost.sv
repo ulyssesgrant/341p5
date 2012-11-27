@@ -54,6 +54,8 @@ module usbHost
   //begin sending eop
   usbHost.do_eop = 1;
   repeat (3) @(posedge clk);
+  
+  usbHost.enable_send = 0;
 
   endtask: prelabRequest
 
@@ -126,13 +128,13 @@ nrzi    flip(nrzi_in, start, clk, rst_L, clear, nrzi_out);
   // small handler to send out DP and DM. use do_eop to control between NRZI output and EOP.
  logic [2:0] counter_dpdm; 
 always_comb begin   // sending DP and DM
-  if (do_eop) begin
-	if (counter_dpdm == 3'd3) begin
-	  {wiresDP,wiresDM} = 2'b10;
+	if (do_eop) begin
+		if (counter_dpdm == 3'd3) begin
+			{wiresDP,wiresDM} = 2'b10;
+		end
+		else {wiresDP,wiresDM} = 2'b00;
 	end
-	else {wiresDP,wiresDM} = 2'b00;
-  end
-  else {wiresDP,wiresDM} = {nrzi_out,~nrzi_out};                 // go back to output from NRZI
+	else {wiresDP,wiresDM} = {nrzi_out,~nrzi_out};                 // go back to output from NRZI
 end
 always_ff @(posedge clk, negedge rst_L) begin
 	if(~rst_L) counter_dpdm <= 3'd0;
