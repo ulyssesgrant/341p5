@@ -12,7 +12,7 @@ module usbHost
   // packet should have SYNC and EOP too
   (input bit  [15:0] data);
 
-  usbHost.token = 11'b0010_1010000;
+  usbHost.token = 11'b1010000_0010;
   usbHost.sync = 8'b0000_0001;
   usbHost.pid = 8'b1000_0111;
 
