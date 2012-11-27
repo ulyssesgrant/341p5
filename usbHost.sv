@@ -13,8 +13,51 @@ module usbHost
   (input bit  [15:0] data);
 
   logic [10:0] token = 11'b0000101_0100;
-    
+  logic [7:0] sync = 8'b0000_0001;
+  logic [7:0] pid = 8'b0001_1110;
+
+  ld_sync = 1;
+  ld_pid = 1;
+  ld_tok = 1;
+  @(posedge clk);
+  ld_sync = 0;
+  ld_pid = 0;
+  ld_tok = 0;
+  sel_1 = 1;
+  sel_2 = 0;
+
+  //begin sending sync
+  @(posedge clk);
+  en_sync = 1;
+  repeat (7) @(posedge clk);
+
+  //begin sending pid_~pid
+  en_sync = 0;
+  sel_1 = 0;
+  @(posedge clk);
+  en_pid = 1;
+  repeat (7) @(posedge clk);
+  en_pid = 0;
+  sel_2 = 1;
+
+  //begin sending crc
+  en_crc = 1;
+  @(posedge clk);
+  en_crc = 0;
+  @(posedge clk);
+  en_tok = 1;
+  repeat (10) @(posedge clk);
+  en_tok = 0;
+  //5 more clock cycles for crc remainder
+  repeat (5) @(posedge clk);
+
+
   endtask: prelabRequest
+assign sync_pid_out = sel_1 ? sync_out : pid_out;
+
+//mux for NRZI
+assign nrzi_in = sel_2 ? stuffer_out : sync_pid_out;
+
 
   task readData
   // host sends memPage to thumb drive and then gets data back from it
@@ -36,7 +79,9 @@ module usbHost
 
   // usbHost starts here!!
 logic nrzi_in, nrzi_out,clear, wiresDP, wiresDM;
-logic stuffer_in, stuffer_out, pause, crc_in, crc_out;
+logic stuffer_in, stuffer_out, pause, crc_in, crc_out, en_crc, sync_out, pid_out, sync_pid_out;
+logic ld_tok, en_tok, ld_sync, en_sync, ld_pid, en_pid;
+logic [10:0] sr_in;
 
 
 //implement enable_send as output of protocol_fsm
@@ -44,15 +89,32 @@ assign wires.DP = enable_send ? wiresDP : 1'bz;
 assign wires.DM = enable_send ? wiresDM : 1'bz;
 
 //CRC5 here!
-sender crcSender(crc_in, rst_L, clk, pause, crc_out);
+sender crcSender(crc_in, (rst_L||en_crc), clk, pause, crc_out);
 //for now: crcSender's output is tied to bitstuffer's input, but should implement mux with crc16's output later!
 assign stuffer_in = crc_out;
+
+//shift register to hold the token as it's sent to crc
+shiftRegister #(11) shiftRegToken(clk, rst_L, ld_tok, en_tok, pause, token, crc_in);
+
+//shift register to hold sync
+shiftRegister #(8) shiftRegSync(clk, rst_L, ld_sync, en_sync, pause, sync, sync_out);
+
+//shift register to hold pid
+shiftRegister #(8) shiftRegPid(clk, rst_L, ld_pid, en_pid, pause, pid, pid_out);
+
 
 ///////////////////////////////////////////////////////////////
 stuffer   bitstuff(stuffer_in, rst_l, stuffer_out, pause);  // stuff addr, endp,crc5,crc16, and DATA
 ///////////////////////////////////////////////////////////////
  //mux in sync, pid 
-  
+
+//mux for selecting between sync or pid
+assign sync_pid_out = sel_1 ? sync_out : pid_out;
+
+//mux for NRZI
+assign nrzi_in = sel_2 ? stuffer_out : sync_pid_out;
+
+
   // %%%%%%%%%%%%%%%%%%%%%%%
   // need work %%%%%%%%%%%%%%%%%%
   //%%%%%%%%%%%%%%%%%%%%%%%%
@@ -219,7 +281,7 @@ endmodule:stuffer
 
 // assume first one is 1;
 
-module nrzi(input logic bit_in, start, rst_l, clear,
+module nrzi(input logic bit_in, start, rst_L, clear,
 				  output logic bit_out);  // everything except EOP
 				  
 logic past, clear;
@@ -230,10 +292,32 @@ else bit_out =~past;      // input is 0 invert.
 
 end
  
-always_ff @(posedge clk, negedge rst_l) begin
-	if(~rst_l) past <= 1'd1;
+always_ff @(posedge clk, negedge rst_L) begin
+	if(~rst_L) past <= 1'd1;
 	else if(clear) past <= 1'd1;
 	else past <= bit_out;
 	end				  
 endmodule
 
+module shiftRegister
+	#(parameter w = 11)
+	(input logic clk, rst_L, ld, en, pause,
+	 input logic [w-1:0] in,
+	 output logic out);
+
+	logic [w-1:0] val;
+
+	always_ff @(posedge clk, negedge rst_L) begin
+		if (rst)
+			val <= w'd0;
+			out <= 1'b0;
+		else if (ld) begin
+			val <= in;
+			out <= val[w-1];
+		end
+		else if (en && !pause) begin
+			val <= val << 1;
+			out <= val[w-1];
+		end
+	end
+endmodule: shiftRegister
