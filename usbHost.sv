@@ -17,6 +17,10 @@ module usbHost
   usbHost.pid = 8'b0111_1000;
 
   usbHost.do_eop = 0;
+  usbHost.en_sync = 0;
+  usbHost.en_crc = 0;
+  usbHost.en_pid = 0;
+  usbHost.en_tok = 0;
 
   usbHost.ld_sync = 1;
   usbHost.ld_pid = 1;
@@ -317,7 +321,7 @@ module shiftRegister
 	logic [w-1:0] val;
 
 	always_ff @(posedge clk, negedge rst_L) begin
-		if (rst_L) begin
+		if (~rst_L) begin
 			val <= 'd0;
 			out <= 1'b0;
 		end
