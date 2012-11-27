@@ -34,8 +34,8 @@ module test
 
     // Prelab data is purely for you to test different packets.  It is not
     // actually used in this prelab.
-	//$monitor($stime,, "DP=%b,DM=%b",usbHost.wires.DP,usbHost.wires.DM);
-	$monitor($stime,, "sync_out=%b,pid_out=%b",usbHost.sync_out,usbHost.pid_out);
+	$monitor($stime,, "clk:%b,DP=%b,DM=%b,nrzi_in=%b",clk,usbHost.wires.DP,usbHost.wires.DM,usbHost.nrzi_in);
+	//$monitor($stime,, "sync_out=%b,pid_out=%b",usbHost.sync_out,usbHost.pid_out);
     host.prelabRequest(flash_data);
     thumbDrive.outputData();
     @(posedge clk);
