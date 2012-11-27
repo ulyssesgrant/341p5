@@ -21,6 +21,7 @@ module usbHost
   ld_tok = 1;
   sel_1 = 1;
   sel_2 = 0;
+  enable_send = 1;
   @(posedge clk);
   ld_sync = 0;
   ld_pid = 0;
