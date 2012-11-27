@@ -44,9 +44,9 @@ module usbHost
   //begin sending pid_~pid
   usbHost.en_sync <= 0;
   usbHost.sel_1 <= 0;
-  @(posedge clk);
   usbHost.en_pid <= 1;
-  repeat (7) @(posedge clk);
+  //@(posedge clk);
+  repeat (8) @(posedge clk);
   usbHost.en_pid <= 0;
   usbHost.sel_2 <= 1;
 
