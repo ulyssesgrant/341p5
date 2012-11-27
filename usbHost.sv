@@ -14,7 +14,7 @@ module usbHost
 
   usbHost.token = 11'b0010_1010000;
   usbHost.sync = 8'b0000_0001;
-  usbHost.pid = 8'b0111_1000;
+  usbHost.pid = 8'b1000_0111;
 
   usbHost.do_eop <= 0;
   usbHost.en_sync <= 0;
