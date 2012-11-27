@@ -12,9 +12,9 @@ module usbHost
   // packet should have SYNC and EOP too
   (input bit  [15:0] data);
 
-  logic [10:0] token = 11'b0000101_0100;
+  logic [10:0] token = 11'b0010_1010000;
   logic [7:0] sync = 8'b0000_0001;
-  logic [7:0] pid = 8'b0001_1110;
+  logic [7:0] pid = 8'b0111_1000;
 
   ld_sync = 1;
   ld_pid = 1;
@@ -51,8 +51,13 @@ module usbHost
   //5 more clock cycles for crc remainder
   repeat (5) @(posedge clk);
 
+  //begin sending eop
+  do_eop = 1;
+  repeat (3) @(posedge clk);
 
   endtask: prelabRequest
+
+
 assign sync_pid_out = sel_1 ? sync_out : pid_out;
 
 //mux for NRZI
