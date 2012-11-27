@@ -16,53 +16,53 @@ module usbHost
   usbHost.sync = 8'b0000_0001;
   usbHost.pid = 8'b0111_1000;
 
-  usbHost.do_eop = 0;
-  usbHost.en_sync = 0;
-  usbHost.en_crc = 0;
-  usbHost.en_pid = 0;
-  usbHost.en_tok = 0;
+  usbHost.do_eop <= 0;
+  usbHost.en_sync <= 0;
+  usbHost.en_crc <= 0;
+  usbHost.en_pid <= 0;
+  usbHost.en_tok <= 0;
 
-  usbHost.ld_sync = 1;
-  usbHost.ld_pid = 1;
-  usbHost.ld_tok = 1;
-  usbHost.sel_1 = 1;
-  usbHost.sel_2 = 0;
+  usbHost.ld_sync <= 1;
+  usbHost.ld_pid <= 1;
+  usbHost.ld_tok <= 1;
+  usbHost.sel_1 <= 1;
+  usbHost.sel_2 <= 0;
   @(posedge clk);
-  usbHost.enable_send = 1;
-  usbHost.ld_sync = 0;
-  usbHost.ld_pid = 0;
-  usbHost.ld_tok = 0;
+  usbHost.enable_send <= 1;
+  usbHost.ld_sync <= 0;
+  usbHost.ld_pid <= 0;
+  usbHost.ld_tok <= 0;
 
   @(posedge clk);
   //begin sending sync
-  usbHost.en_sync = 1;
+  usbHost.en_sync <= 1;
   repeat (7) @(posedge clk);
 
   //begin sending pid_~pid
-  usbHost.en_sync = 0;
-  usbHost.sel_1 = 0;
+  usbHost.en_sync <= 0;
+  usbHost.sel_1 <= 0;
   @(posedge clk);
-  usbHost.en_pid = 1;
+  usbHost.en_pid <= 1;
   repeat (7) @(posedge clk);
-  usbHost.en_pid = 0;
-  usbHost.sel_2 = 1;
+  usbHost.en_pid <= 0;
+  usbHost.sel_2 <= 1;
 
   //begin sending crc
-  usbHost.en_crc = 1;
+  usbHost.en_crc <= 1;
   @(posedge clk);
-  usbHost.en_crc = 0;
+  usbHost.en_crc <= 0;
   @(posedge clk);
-  usbHost.en_tok = 1;
+  usbHost.en_tok <= 1;
   repeat (10) @(posedge clk);
-  usbHost.en_tok = 0;
+  usbHost.en_tok <= 0;
   //5 more clock cycles for crc remainder
   repeat (5) @(posedge clk);
 
   //begin sending eop
-  usbHost.do_eop = 1;
+  usbHost.do_eop <= 1;
   repeat (3) @(posedge clk);
   
-  usbHost.enable_send = 0;
+  usbHost.enable_send <= 0;
 
   endtask: prelabRequest
 
