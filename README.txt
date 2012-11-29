@@ -1,6 +1,6 @@
 The commands to make different projects:
 
-prelab:
+ hahaha
   make prelab
 
 your testbench:
@@ -11,3 +11,6 @@ TA testbench:
 
 Faulty testbench: (will be released later)
   make faulty
+
+
+TT_TT
