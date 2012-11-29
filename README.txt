@@ -1,6 +1,6 @@
 The commands to make different projects:
 
-prelab:
+prelab12345:
   make prelab
 
 your testbench:
