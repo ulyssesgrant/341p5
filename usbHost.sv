@@ -1,5 +1,7 @@
 `default_nettype none
 
+//18-341 P5 Gun Charnmanee (gcharnma) Dylan Koenig (djkoenig)
+
 // Write your usb host here.  Do not modify the port list.
 module usbHost
   (input logic clk, rst_L, 
