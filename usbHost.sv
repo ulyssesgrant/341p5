@@ -313,7 +313,7 @@ always_comb begin
 				ns= DATA;
 			end
 		COMP:begin
-		        if(counter >= 7'd69) begin
+		        if(counter >= 7'd80) begin
 					ns = DEAD;
 					mux = 1'b1;
 				end
