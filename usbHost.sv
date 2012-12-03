@@ -17,6 +17,7 @@ module usbHost
   usbHost.token = 11'b1010000_0010;
   usbHost.sync = 8'b0000_0001;
   usbHost.pid = 8'b1000_0111;
+  usbHost.sel_3 <= 0; //Do CRC5
 
   usbHost.do_eop <= 0;
   usbHost.en_sync <= 0;
@@ -135,11 +136,6 @@ assign sync_pid_out = sel_1 ? sync_out : pid_out;
 
 //mux for NRZI
 assign nrzi_in = sel_2 ? stuffer_out : sync_pid_out;
-
-
-  // %%%%%%%%%%%%%%%%%%%%%%%
-  // need work %%%%%%%%%%%%%%%%%%
-  //%%%%%%%%%%%%%%%%%%%%%%%%
   
 ////////////////////////////////////////////////////////////////
 nrzi    flip(nrzi_in, start, clk, rst_L, clear, nrzi_out);  
