@@ -31,6 +31,7 @@ module usbHost
   usbHost.ld_tok <= 1;
   usbHost.sel_1 <= 1;
   usbHost.sel_2 <= 0;
+  usbHost.en_crc_L <= 1; //turn off CRCs
   @(posedge clk);
   usbHost.enable_send <= 1;
   usbHost.clear <= 0;
@@ -49,23 +50,24 @@ module usbHost
   usbHost.sel_1 <= 0;
   usbHost.en_pid <= 1;
   repeat (7) @(posedge clk);
-  usbHost.en_crc_L <= 0;
   @(posedge clk);
   usbHost.en_pid <= 0;
   usbHost.sel_2 <= 1;
 
   //begin sending crc
-  usbHost.en_crc_L <= 1;
+  usbHost.en_crc_L <= 0; // turn on CRC
   usbHost.en_tok <= 1;
   @(posedge clk);
   //usbHost.en_crc_L <= 1;
   repeat (9) @(posedge clk);
   usbHost.en_tok <= 0;
+  // off by one?
   //5 more clock cycles for crc remainder
   repeat (5) @(posedge clk);
 
   //begin sending eop
   @(posedge clk);
+  usbHost.en_crc_L <= 1;
   usbHost.do_eop <= 1;
   repeat (2) @(posedge clk);
   usbHost.do_eop <= 0;
@@ -102,15 +104,16 @@ logic sel_1, sel_2, sel_3; //sel_1 for sync or pid, sel_2 for nrzi input, sel_3 
 logic [10:0] sr_in, token;
 logic [63:0] data;
 logic [7:0] sync, pid;
+logic clear_sender;
 
-
+assign clear_sender = en_crc_L;
 //implement enable_send as output of protocol_fsm
 assign wires.DP = enable_send ? wiresDP : 1'bz;
 assign wires.DM = enable_send ? wiresDM : 1'bz;
 
-//CRC5 here!
-sender crcSender(crc_in, (rst_L&&en_crc_L), clk, pause, crc_out);
-sender16 crcSender16(crc16_in, (rst_L&&en_crc_L), clk, pause, crc16_out);
+///////////////////////////////CRC machines
+sender crcSender(crc_in, rst_L, clk, clear_sender ,pause, crc_out);
+sender16 crcSender16(crc16_in, rst_L, clk, clear_sender ,pause, crc16_out);
 //for now: crcSender's output is tied to bitstuffer's input, but should implement mux with crc16's output later!
 assign stuffer_in = sel_3 ? crc16_out : crc_out;
 
@@ -122,7 +125,7 @@ shiftRegister #(8) shiftRegSync(clk, rst_L, ld_sync, en_sync, 1'd0, sync, sync_o
 
 //shift register to hold pid
 shiftRegister #(8) shiftRegPid(clk, rst_L, ld_pid, en_pid, 1'd0, pid, pid_out);
-
+//shift register to hold DATA
 shiftRegister #(64) shiftRegData(clk, rst_L, ld_data, en_data, pause, data, crc16_in);
 
 
@@ -162,7 +165,7 @@ endmodule: usbHost
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                       modified CRC 5 from hw2                                          //
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-module  sender(input logic bit_in, rst_l, clk, pause,  //pause for bit stuffing
+module  sender(input logic bit_in, rst_l, clk, clear, pause,  //pause for bit stuffing
 						output logic send_bit);
 	logic [4:0] Q;
 	logic go;
@@ -171,13 +174,13 @@ module  sender(input logic bit_in, rst_l, clk, pause,  //pause for bit stuffing
 
 	assign send_bit = (mux) ?out_bit : bit_in; // mux output between incoming bit and complement
 	
-	senderFSM sendit(clk,rst_l,pause,mux,go);
-	crcCal calcIt(send_bit,clk,rst_l,pause, Q);
-	complementMake make(rst_l, go, clk, pause,Q,out_bit);
+	senderFSM sendit(clk,rst_l,clear,pause,mux,go);
+	crcCal calcIt(send_bit,clk,rst_l,clear,pause, Q);
+	complementMake make(rst_l, go, clk,clear, pause,Q,out_bit);
 	
 endmodule: sender
 
-module senderFSM( input logic clk, rst_l, pause,
+module senderFSM( input logic clk, rst_l, clear, pause,
 							  output logic mux,go);
 
 	logic [4:0] counter;
@@ -218,6 +221,10 @@ always_ff @(posedge clk, negedge rst_l) begin
 			cs <= FIRST;
 			counter <= 5'b0;
 			end
+		else if(clear) begin
+			cs<=FIRST;
+			counter <= 5'b0;
+		end
 		else if(pause)begin
 			cs <= cs; // stall the process by one clock
 			counter<= counter;
@@ -229,11 +236,12 @@ always_ff @(posedge clk, negedge rst_l) begin
 	end
 endmodule:senderFSM
 
-module  crcCal(input logic bit_in,clk,rst_l, pause, output logic [4:0] Q);
+module  crcCal(input logic bit_in,clk,rst_l, clear, pause, output logic [4:0] Q);
 
 always_ff @(posedge clk, negedge rst_l) begin
 		if(~rst_l)
 			Q <= 5'b11111;
+		else if(clear) Q<= 5'b11111;
 		else if(pause) Q <= Q; //stall for one clock.
 		else begin
 			Q[0] <= bit_in ^ Q[4];
@@ -245,7 +253,7 @@ always_ff @(posedge clk, negedge rst_l) begin
 end
 endmodule: crcCal
 
-module complementMake(input logic rst_l, go, clk, pause,
+module complementMake(input logic rst_l, go, clk, clear, pause,
 									  input logic [4:0] Q,
 										output logic oneBit);
 		logic [3:0] remainder;
@@ -257,6 +265,7 @@ module complementMake(input logic rst_l, go, clk, pause,
 		always_ff@(posedge clk, negedge rst_l) begin
 			if(~rst_l)
 				remainder <= 4'b0;
+			else if (clear ) remainder <=4'b0;
 			else if(pause) remainder <= remainder; //stall for one clock.
 			else if(go)
 				remainder <= ~(Q[3:0]); // need to hold 4 bits since the first one is sent out on the clock
@@ -271,7 +280,7 @@ endmodule: complementMake
 //                                                           CRC16                                                            //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-module  sender16(input logic bit_in, rst_l, clk, pause,  //pause for bit stuffing
+module  sender16(input logic bit_in, rst_l, clk, clear, pause,  //pause for bit stuffing
 						output logic send_bit);
 	logic [15:0] Q;
 	logic go;
@@ -280,13 +289,13 @@ module  sender16(input logic bit_in, rst_l, clk, pause,  //pause for bit stuffin
 
 	assign send_bit = (mux) ?out_bit : bit_in; // mux output between incoming bit and complement
 	
-	senderFSM16 sendit(clk,rst_l,pause,mux,go);
-	crcCal16 calcIt(send_bit,clk,rst_l,pause,Q);
-	complementMake16 make(rst_l,go,clk,pause,Q,out_bit);
+	senderFSM16 sendit(clk,rst_l, clear, pause,mux,go);
+	crcCal16 calcIt(send_bit,clk,rst_l, clear, pause,Q);
+	complementMake16 make(rst_l,go,clk, clear, pause,Q,out_bit);
 	
 endmodule: sender16
 
-module senderFSM16( input logic clk, rst_l, pause,
+module senderFSM16( input logic clk, rst_l, clear, pause,
 							  output logic mux,go);
 
 	logic [6:0] counter;
@@ -327,6 +336,10 @@ always_ff @(posedge clk, negedge rst_l) begin
 			cs <= FIRST;
 			counter <= 7'd0;
 			end
+		else if( clear) begin
+			cs<= FIRST;
+			counter<= 7'd0;
+		end
 		else if(pause)begin
 			cs <= cs; // stall the process by one clock
 			counter<= counter;
@@ -338,11 +351,12 @@ always_ff @(posedge clk, negedge rst_l) begin
 	end
 endmodule:senderFSM16
 
-module  crcCal16(input logic bit_in,clk,rst_l, pause, output logic [15:0] Q);
+module  crcCal16(input logic bit_in,clk,rst_l, clear, pause, output logic [15:0] Q);
 
 always_ff @(posedge clk, negedge rst_l) begin
 		if(~rst_l)
 			Q <= 16'b1111_1111_1111_1111;
+		else if(clear) Q<= 16'hFFFF;
 		else if(pause) Q <= Q; //stall for one clock.
 		else begin
 			Q[0] <= bit_in^Q[15];
@@ -365,7 +379,7 @@ always_ff @(posedge clk, negedge rst_l) begin
 end
 endmodule: crcCal16
 
-module complementMake16(input logic rst_l, go, clk, pause,
+module complementMake16(input logic rst_l, go, clk, clear, pause,
 									  input logic [15:0] Q,
 										output logic oneBit);
 		logic [14:0] remainder;
@@ -377,6 +391,7 @@ module complementMake16(input logic rst_l, go, clk, pause,
 		always_ff@(posedge clk, negedge rst_l) begin
 			if(~rst_l)
 				remainder <= 15'd0;
+			else if(clear) remainder <=15'd0;
 			else if(pause) remainder <= remainder; //stall for one clock.
 			else if(go)
 				remainder <= ~(Q[14:0]); // need to hold 15 bits since the first one is sent out on the clock
