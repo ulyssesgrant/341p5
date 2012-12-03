@@ -147,7 +147,7 @@ nrzi    flip(nrzi_in, start, clk, rst_L, clear, nrzi_out);
  logic [2:0] counter_dpdm; 
 always_comb begin   // sending DP and DM
 	if (do_eop) begin
-		if (counter_dpdm == 3'd3) begin
+		if (counter_dpdm == 3'd2) begin
 			{wiresDP,wiresDM} = 2'b10;
 		end
 		else {wiresDP,wiresDM} = 2'b00;
@@ -474,3 +474,123 @@ module shiftRegister
 		end
 	end
 endmodule: shiftRegister
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                            SEND TOKEN FSM                                                     //
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+module send_token(input logic clk, rst_l, start, pause,
+							  input logic [10:0]  token_in,
+							 input logic [15:0] in_reg,
+							 output logic do_eop,en_sync,en_crc_L, en_pid, en_tok, clear, ld_sync, ld_pid,ld_tok, sel_1,sel_2,enable_send,
+							 output logic [10:0] token_out,
+							 output logic done); // done signal sends to above.
+
+	logic [4:0] sync_count, pid_count,token_count, eop_count;
+	logic [4:0] sync_add,pid_add, token_add, eop_add;
+	enum logic [2:0]  {IDLE, SYNC, PID, TOKE, EOP} cs,ns;
+	logic clear_counter;
+assign token_out = token_in;
+always_comb begin
+	sync_add = 5'b0;
+	pid_add =5'b0;
+	token_add = 5'b0;
+	eop_add = 5'b0;
+	clear_counter=1'b0;
+	do_eop = 1'b0;
+	en_sync =1'b0;
+	en_crc_L = 1'b1;// has CRC off.
+	en_pid = 1'b0;
+	en_tok = 1'b0;
+	clear = 1'b1;
+	ld_sync =1'b0;   //
+	ld_pid = 1'b0;    //
+	ld_tok = 1'b0;    //
+	sel_1 =1'b0;      //
+	sel_2 =1'b0;     //
+	enable_send = 1'b0;
+	case(cs)
+		IDLE :begin
+				if(start) begin
+					ns = SYNC;
+					ld_sync <= 1'b1;
+					ld_pid <=1'b1;
+					ld_tok <= 1'b1;
+					sel_1 <=1'b1;
+					sel_2<=1'b0;
+					end
+				else ns = IDLE;    // wait for start signal. 
+		end
+		SYNC: begin
+			en_sync = 1'b1;
+			sel_1 = 1'b1;
+			sel_2 = 1'b0;
+			if(sync_count < 5'b7)begin
+				ns = SYNC;	
+			end
+			else ns = PID; 
+		end
+		PID: begin
+			en_pid = 1'b1;
+			sel_1 = 1'b0;
+			se_2  = 1'b0;
+			if(pid_count<5'b7) begin
+				ns = PID;
+			end
+			else ns = TOKE;
+		end
+		TOKE:begin
+			sel_1 = 1'b0;
+			sel_2 = 1'b1;
+			en_crc_L = 1'b0;
+			if(token_count <5'10) en_tok =1'b1;
+			else en_tok = 1'b0;
+			if(token_count < 5'b15) begin
+			ns = TOKE;
+			end
+			else ns = EOP;
+		end
+		EOP: begin
+			en_crc_L =1'b1;
+			do_eop  1'b1;
+			if(eop_count <5'b2) begin
+				ns = EOP;
+			end
+			else begin
+				ns = IDLE;
+				clear_counter =1'b1;
+			end
+		end
+	endcase
+end
+
+	always_ff @(posedge clk, negedge rst_l) begin
+		if(~rst_l) begin
+			cs <=IDLE;
+			sync_count <= 5'b0;
+			pid_count <= 5'b0;
+			token_count <= 5'b0;
+			eop_count <= 5'b0;
+		end
+		else if(clear_counter) begin
+			cs <=ns;
+			sync_count <= 5'b0;
+			pid_count <= 5'b0;
+			token_count <= 5'b0;
+			eop_count <= 5'b0;
+		end
+		else if(pause) begin
+			cs <=cs;
+			sync_count <= sync_count;
+			pid_count <= pid_count;
+			token_count <= token_count;
+			eop_count <= eop_count;
+		end
+		else 
+			cs <=ns;
+			sync_count <= sync_count + sync_add;
+			pid_count <= pid_count +pid_add;
+			token_count <= token_count +token_add;
+			eop_count <= eop_count + eop_add;
+	end
+endmodule: send_token
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
