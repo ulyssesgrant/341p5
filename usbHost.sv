@@ -13,7 +13,17 @@ module usbHost
   // sends an OUT packet with ADDR=5 and ENDP=4
   // packet should have SYNC and EOP too
   (input bit  [15:0] data);
+  
+  usbHost.token = 11'b1010000_0010;
+  usbHost.sync = 8'b0000_0001;
+  usbHost.pid = 8'b1000_0111;
+  usbHost.sel_3 <= 1'b0;
+  usbHost.start_send_token <=1'b1;
+  wait(usbHost.done_send_token);
+  usbHost.start_send_token<= 1'b0;
+  
 
+  /*
   usbHost.token = 11'b1010000_0010;
   usbHost.sync = 8'b0000_0001;
   usbHost.pid = 8'b1000_0111;
@@ -74,7 +84,7 @@ module usbHost
   @(posedge clk);
   
   usbHost.enable_send <= 0;
-
+*/
   endtask: prelabRequest
 
 
@@ -105,7 +115,13 @@ logic [10:0] sr_in, token;
 logic [63:0] data;
 logic [7:0] sync, pid;
 logic clear_sender;
-
+logic done_send_token,start_send_token;
+logic clear_stuffer;
+////////////////////////////////////////////
+send_token handle_token(clk, rst_L, start_send_token, pause,
+							  do_eop,en_sync,en_crc_L, en_pid, en_tok, clear, ld_sync, ld_pid,ld_tok, sel_1,sel_2,enable_send,clear_stuffer,
+							  done_send_token); // done signal sends to above.
+////////////////////////////////////////////
 assign clear_sender = en_crc_L;
 //implement enable_send as output of protocol_fsm
 assign wires.DP = enable_send ? wiresDP : 1'bz;
@@ -130,7 +146,7 @@ shiftRegister #(64) shiftRegData(clk, rst_L, ld_data, en_data, pause, data, crc1
 
 
 ///////////////////////////////////////////////////////////////
-stuffer   bitstuff(stuffer_in, clk, rst_L, clear, stuffer_out, pause);  // stuff addr, endp,crc5,crc16, and DATA
+stuffer   bitstuff(stuffer_in, clk, rst_L, clear_stuffer, stuffer_out, pause);  // stuff addr, endp,crc5,crc16, and DATA
 ///////////////////////////////////////////////////////////////
  //mux in sync, pid 
 
@@ -479,18 +495,16 @@ endmodule: shiftRegister
 //                                            SEND TOKEN FSM                                                     //
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 module send_token(input logic clk, rst_l, start, pause,
-							  input logic [10:0]  token_in,
-							 input logic [15:0] in_reg,
-							 output logic do_eop,en_sync,en_crc_L, en_pid, en_tok, clear, ld_sync, ld_pid,ld_tok, sel_1,sel_2,enable_send,
-							 output logic [10:0] token_out,
+							 output logic do_eop,en_sync,en_crc_L, en_pid, en_tok, clear, ld_sync, ld_pid,ld_tok, sel_1,sel_2,enable_send, clear_stuffer,
 							 output logic done); // done signal sends to above.
 
 	logic [4:0] sync_count, pid_count,token_count, eop_count;
 	logic [4:0] sync_add,pid_add, token_add, eop_add;
 	enum logic [2:0]  {IDLE, SYNC, PID, TOKE, EOP} cs,ns;
 	logic clear_counter;
-assign token_out = token_in;
 always_comb begin
+	done = 1'b0;
+	clear_stuffer = 1'b1;
 	sync_add = 5'b0;
 	pid_add =5'b0;
 	token_add = 5'b0;
@@ -521,43 +535,58 @@ always_comb begin
 				else ns = IDLE;    // wait for start signal. 
 		end
 		SYNC: begin
+			clear = 1'b0;
 			en_sync = 1'b1;
 			sel_1 = 1'b1;
 			sel_2 = 1'b0;
-			if(sync_count < 5'b7)begin
+			sync_add =1'b1;
+			enable_send =1'b1;
+			if(sync_count < 5'd7)begin
 				ns = SYNC;	
 			end
 			else ns = PID; 
 		end
 		PID: begin
+			clear = 1'b0;
 			en_pid = 1'b1;
 			sel_1 = 1'b0;
-			se_2  = 1'b0;
-			if(pid_count<5'b7) begin
+			sel_2  = 1'b0;
+			pid_add = 1'b1;
+			enable_send =1'b1;
+			if(pid_count<5'd7) begin
 				ns = PID;
 			end
 			else ns = TOKE;
 		end
 		TOKE:begin
+			clear_stuffer = 1'b0;
+			clear = 1'b0;
 			sel_1 = 1'b0;
 			sel_2 = 1'b1;
 			en_crc_L = 1'b0;
-			if(token_count <5'10) en_tok =1'b1;
+			token_add =1'b1;
+			enable_send =1'b1;
+			if(token_count <5'd10) en_tok =1'b1;
 			else en_tok = 1'b0;
-			if(token_count < 5'b15) begin
+			if(token_count < 5'd15) begin
 			ns = TOKE;
 			end
 			else ns = EOP;
 		end
 		EOP: begin
+			clear = 1'b0;
 			en_crc_L =1'b1;
-			do_eop  1'b1;
-			if(eop_count <5'b2) begin
+			do_eop  = 1'b1;
+			eop_add =1'b1;
+			enable_send =1'b1;
+			if(eop_count <5'd2) begin
 				ns = EOP;
 			end
 			else begin
 				ns = IDLE;
+				done = 1'b1;
 				clear_counter =1'b1;
+				
 			end
 		end
 	endcase
@@ -585,12 +614,13 @@ end
 			token_count <= token_count;
 			eop_count <= eop_count;
 		end
-		else 
+		else begin
 			cs <=ns;
 			sync_count <= sync_count + sync_add;
 			pid_count <= pid_count +pid_add;
 			token_count <= token_count +token_add;
 			eop_count <= eop_count + eop_add;
+		end
 	end
 endmodule: send_token
 //////////////////////////////////////////////////////////////////////////////////////////////////////////

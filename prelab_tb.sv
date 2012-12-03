@@ -34,8 +34,15 @@ module test
 
     // Prelab data is purely for you to test different packets.  It is not
     // actually used in this prelab.
+	
 	$monitor($stime,, "DP=%b,DM=%b,nrzi_in=%b sync_val=%b sync_pid_out =%b pid_out=%b stuffer_out=%b,pause=%b,do_eop=%b",usbHost.wires.DP,usbHost.wires.DM,usbHost.nrzi_in,
 usbHost.shiftRegSync.val, usbHost.sync_pid_out,usbHost.pid_out,usbHost.stuffer_out,usbHost.pause,usbHost.do_eop);
+    
+	/*
+	$monitor($stime,, "nrzi_in=%b sync_val=%b sync_pid_out =%b pid_out=%b stuffer_out=%b,pause=%b,do_eop=%b sync_count =%d pid_count=%d token_count =%d eop_count =%d",usbHost.nrzi_in,
+usbHost.shiftRegSync.val, usbHost.sync_pid_out,usbHost.pid_out,usbHost.stuffer_out,usbHost.pause,usbHost.do_eop,top.host.handle_token.sync_count,top.host.handle_token.pid_count,
+		top.host.handle_token.token_count,top.host.handle_token.eop_count);
+		*/
 	//$monitor($stime,, "sync_out=%b,pid_out=%b",usbHost.sync_out,usbHost.pid_out);
     host.prelabRequest(flash_data);
     thumbDrive.outputData();
