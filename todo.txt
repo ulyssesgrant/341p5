@@ -1,2 +1,5 @@
--add crc16 in send datapath and mux it with crc5
--EVERYTHING ELSE
+-add receive fsm/dp to usbHost.sv
+-write top_fsm.sv
+-add top_fsm to usbHost.sv
+-tie it all together
+-cry at all the bugs :[
