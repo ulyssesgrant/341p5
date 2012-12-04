@@ -1,5 +1,5 @@
 module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync,
-					output logic en_sync_L, fail, success, en_pid_L, en_crc_L)
+					output logic en_sync_L, fail, success, en_pid_L, en_crc_L, en_unstuff_L)
 
 	//en_pid_L is clear_pid in datapath
 
@@ -29,6 +29,7 @@ module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync,
 		en_crc_L = 1;
 		crc_add = 0;
 		eop_add = 0;
+		en_unstuff_L = 1;
 		case(cs)
 			IDLE: begin
 				ns = r_data_start ? WATCH : IDLE;
@@ -57,6 +58,7 @@ module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync,
 				data_add = 1;
 				ns = (dataDone && !pause) ? CRCREC : READDATA;
 				en_crc_L = 0;
+				en_unstuff_L = 0;
 			end
 			CRCREC: begin
 				crc_add = 1;
@@ -74,12 +76,14 @@ module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync,
 				eop_add = 1;
 				finish = eopDone ? 1 : 0;
 				success = 0;
+				fail = eopDone ? 1 : 0;
 				ns = eopDone ? IDLE : WAITEOP1;
 			end
 			WAITEOP2: begin
 				eop_add = 1;
 				finish = eopDone ? 1 : 0;
 				success = eopDone ? 1 : 0;
+				fail = 0;
 				ns = eopDone ? IDLE : WAITEOP2;
 			end
 		endcase
