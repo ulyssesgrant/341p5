@@ -47,7 +47,7 @@ check_pid testpid(reverse_nrzi_out, clk, rst_l, clear_pid, pid_valid,pid_out);
 receiver takecrc16(unstuff_out, rst_l, clk, pause_receive, clear_unstuff, clear_crc, msg_out, msg_ok,done);
 
 //receive_data fsm instantiation
-receive_data r_data_fsm(clk, rst_l, pause_receive, r_data_start, valid_sync, clear_sync, r_data_fail, r_data_success, clear_pid, clear_crc, clear_unstuff)
+receive_data r_data_fsm(clk, rst_l, pause_receive, r_data_start, valid_sync, msg_ok, clear_sync, r_data_fail, r_data_success, clear_pid, clear_crc, clear_unstuff)
 //^todo: attach r_data_start,r_data_fail,r_data_success to the top fsm.
 //and add a clear_crc to the crc module in the receiver datapath
 
@@ -254,8 +254,8 @@ endmodule:receiverFSM
 
 /*****RECEIVE_DATA FSM*****/
 
-module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync,
-					output logic en_sync_L, fail, success, en_pid_L, en_crc_L, en_unstuff_L)
+module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync, correct,
+					output logic en_sync_L, fail, success, en_pid_L, en_crc_L, en_unstuff_L);
 
 	//en_pid_L is clear_pid in datapath
 
@@ -377,7 +377,7 @@ endmodule: receive_data
 
 module receive_acknak(input logic clk, rst_L, receive_hand,
 					input logic [3:0] pid,
-					output logic fail, en_pid_L, en_sync_L, ack, nak, receive)
+					output logic fail, en_pid_L, en_sync_L, ack, nak, receive);
 
 	//en_pid_L is clear_pid in datapath
 
@@ -467,4 +467,4 @@ module receive_acknak(input logic clk, rst_L, receive_hand,
 			eop_count <= eop_count + eop_add;
 		end
 
-endmodule: receive_data
+endmodule: receive_acknak

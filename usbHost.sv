@@ -664,14 +664,14 @@ always_comb begin
 	enable_send = 1'b0;
 	case(cs)
 		IDLE :begin
-				if(start) begin
-					ns = SYNC;
-					ld_sync <= 1'b1;
-					ld_pid <=1'b1;
-					sel_1 <=1'b1;
-					sel_2<=1'b0;
-					end
-				else ns = IDLE;    // wait for start signal. 
+			if(start) begin
+				ns = SYNC;
+				ld_sync <= 1'b1;
+				ld_pid <=1'b1;
+				sel_1 <=1'b1;
+				sel_2<=1'b0;
+				end
+			else ns = IDLE;    // wait for start signal. 
 		end
 		SYNC: begin
 			clear = 1'b0;

@@ -1,6 +1,6 @@
 module receive_acknak(input logic clk, rst_L, receive_hand,
 					input logic [3:0] pid,
-					output logic fail, en_pid_L, en_sync_L, ack, nak, receive)
+					output logic fail, en_pid_L, en_sync_L, ack, nak, receive);
 
 	//en_pid_L is clear_pid in datapath
 
@@ -90,4 +90,4 @@ module receive_acknak(input logic clk, rst_L, receive_hand,
 			eop_count <= eop_count + eop_add;
 		end
 
-endmodule: receive_data
+endmodule: receive_acknak
