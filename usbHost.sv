@@ -15,76 +15,30 @@ module usbHost
   (input bit  [15:0] data);
   
   usbHost.token = 11'b1010000_0010;
+  usbHost.data_out =64'hDEADBEEF1987CAFE;
   usbHost.sync = 8'b0000_0001;
+  usbHost.mode = 2'b0;
   usbHost.pid = 8'b1000_0111;
-  usbHost.sel_3 <= 1'b0;
+  
+  /*
+  usbHost.mode = 2'd0;
   usbHost.start_send_token <=1'b1;
   wait(usbHost.done_send_token);
   usbHost.start_send_token<= 1'b0;
-  
+  */
 
+   usbHost.mode = 2'd1;
+  usbHost.start_send_data <=1'b1;
+  wait(usbHost.done_send_data);
+  usbHost.start_send_data<= 1'b0;
+  
   /*
-  usbHost.token = 11'b1010000_0010;
-  usbHost.sync = 8'b0000_0001;
-  usbHost.pid = 8'b1000_0111;
-  usbHost.sel_3 <= 0; //Do CRC5
-
-  usbHost.do_eop <= 0;
-  usbHost.en_sync <= 0;
-  usbHost.en_crc_L <= 1;
-  usbHost.en_pid <= 0;
-  usbHost.en_tok <= 0;
-  usbHost.clear <= 1;
-
-  usbHost.ld_sync <= 1;
-  usbHost.ld_pid <= 1;
-  usbHost.ld_tok <= 1;
-  usbHost.sel_1 <= 1;
-  usbHost.sel_2 <= 0;
-  usbHost.en_crc_L <= 1; //turn off CRCs
-  @(posedge clk);
-  usbHost.enable_send <= 1;
-  usbHost.clear <= 0;
-  usbHost.en_sync <= 1;
-  usbHost.ld_sync <= 0;
-  usbHost.ld_pid <= 0;
-  usbHost.ld_tok <= 0;
-
-  @(posedge clk);
-  //begin sending sync
-  usbHost.en_sync <= 1;
-  repeat (7) @(posedge clk);
-
-  //begin sending pid_~pid
-  usbHost.en_sync <= 0;
-  usbHost.sel_1 <= 0;
-  usbHost.en_pid <= 1;
-  repeat (7) @(posedge clk);
-  @(posedge clk);
-  usbHost.en_pid <= 0;
-  usbHost.sel_2 <= 1;
-
-  //begin sending crc
-  usbHost.en_crc_L <= 0; // turn on CRC
-  usbHost.en_tok <= 1;
-  @(posedge clk);
-  //usbHost.en_crc_L <= 1;
-  repeat (9) @(posedge clk);
-  usbHost.en_tok <= 0;
-  // off by one?
-  //5 more clock cycles for crc remainder
-  repeat (5) @(posedge clk);
-
-  //begin sending eop
-  @(posedge clk);
-  usbHost.en_crc_L <= 1;
-  usbHost.do_eop <= 1;
-  repeat (2) @(posedge clk);
-  usbHost.do_eop <= 0;
-  @(posedge clk);
+   usbHost.mode = 2'd2;
+  usbHost.start_send_hand <=1'b1;
+  wait(usbHost.done_send_hand);
+  usbHost.start_send_hand<= 1'b0;
+  */
   
-  usbHost.enable_send <= 0;
-*/
   endtask: prelabRequest
 
 
@@ -110,17 +64,63 @@ module usbHost
 logic nrzi_in, nrzi_out, clear, start, wiresDP, wiresDM;
 logic stuffer_in, stuffer_out, pause, crc_in, crc16_in, crc_out, crc16_out, en_crc_L, sync_out, pid_out, sync_pid_out;
 logic ld_tok, en_tok, ld_sync, en_sync, ld_pid, en_pid, ld_data, en_data, enable_send, do_eop;
-logic sel_1, sel_2, sel_3; //sel_1 for sync or pid, sel_2 for nrzi input, sel_3 for crc16 or crc
-logic [10:0] sr_in, token;
-logic [63:0] data;
+logic sel_1, sel_2, sel_3; //sel_1 for sync or pid, sel_2 for nrzi input, sel_3 for crc16 or crc5
+logic [10:0] token;
+logic [63:0] data_out;
 logic [7:0] sync, pid;
 logic clear_sender;
 logic done_send_token,start_send_token;
 logic clear_stuffer;
+logic start_send_data, start_send_hand;
+////////////////////////////////////////////////////////////////
+logic [1:0] mode; // 0 = SEND_TOKEN, 1 = SEND_DATA, 2 = SEND_HAND
+////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////
+logic do_eop_token,en_sync_token,en_crc_L_token, en_pid_token, en_tok_token, clear_token, ld_sync_token, ld_pid_token,
+			ld_tok_token, sel_1_token,sel_2_token,enable_send_token,clear_stuffer_token;
+logic do_eop_hand,en_sync_hand, en_pid_hand, clear_hand, ld_sync_hand, ld_pid_hand, sel_1_hand,sel_2_hand,enable_send_hand,
+		 done_send_hand;
+logic  do_eop_data, en_sync_data ,en_crc_L_data, en_pid_data, en_data_data, clear_data, ld_sync_data, ld_pid_data,
+		 ld_data_data, sel_1_data,sel_2_data,enable_send_data, clear_stuffer_data,
+		done_send_data;
+
 send_token handle_token(clk, rst_L, start_send_token, pause,
-							  do_eop,en_sync,en_crc_L, en_pid, en_tok, clear, ld_sync, ld_pid,ld_tok, sel_1,sel_2,enable_send,clear_stuffer,
+							  do_eop_token,en_sync_token,en_crc_L_token, en_pid_token, en_tok_token, clear_token, ld_sync_token, ld_pid_token,
+							  ld_tok_token, sel_1_token,sel_2_token,enable_send_token,clear_stuffer_token,
 							  done_send_token); // done signal sends to above.
+							  
+send_data handle_data(clk, rst_L, start_send_data, pause,
+							 do_eop_data, en_sync_data ,en_crc_L_data, en_pid_data, en_data_data, clear_data, ld_sync_data, ld_pid_data,
+							 ld_data_data, sel_1_data,sel_2_data,enable_send_data, clear_stuffer_data,
+							 done_send_data); // done signal sends to above.
+							  
+							  
+send_ack_nak handle_hand( clk, rst_L, start_send_hand, pause,  // ack or nak is determined by the higher FSM
+							  do_eop_hand,en_sync_hand, en_pid_hand, clear_hand, ld_sync_hand, ld_pid_hand, sel_1_hand,sel_2_hand,enable_send_hand,
+							 done_send_hand); // done signal sends to above.  							  
+							  
+
+mux4ways#(1)  mux1(mode, do_eop_token,do_eop_data,do_eop_hand, 1'b0 ,do_eop),
+					   mux2(mode, en_sync_token, en_sync_data, en_sync_hand,1'b0, en_sync),
+					   mux3(mode, en_crc_L_token, en_crc_L_data, 1'b1, 1'b0, en_crc_L),
+					   mux4(mode, en_pid_token, en_pid_data, en_pid_hand, 1'b0, en_pid),
+					   mux5(mode, en_tok_token, 1'b0, 1'b0, 1'b0, en_tok),
+					   mux6(mode, clear_token, clear_data, clear_hand, 1'b0,clear),
+					   mux7(mode,  ld_sync_token, ld_sync_data, ld_sync_hand, 1'b0,ld_sync),
+					   mux8(mode, ld_pid_token, ld_pid_data, ld_pid_hand, 1'b0,ld_pid),
+					   mux9(mode, ld_tok_token, 1'b0, 1'b0,1'b0, ld_tok),
+					   mux10(mode, sel_1_token, sel_1_data, sel_1_hand,1'bz, sel_1),
+					   mux11(mode, sel_2_token, sel_2_data, sel_2_hand, 1'bz,sel_2),
+					   mux12(mode, enable_send_token, enable_send_data, enable_send_hand,1'bz,enable_send),
+					   mux13(mode, clear_stuffer_token, clear_stuffer_data, 1'b1,1'bz,clear_stuffer);
+always_comb begin
+	case(mode)
+		2'd0: sel_3 = 1'b0;
+		2'd1: sel_3 = 1'b1;
+		2'd2: sel_3 = 1'bz;
+		2'd3: sel_3 = 1'bz;
+	endcase
+end
 ////////////////////////////////////////////
 assign clear_sender = en_crc_L;
 //implement enable_send as output of protocol_fsm
@@ -142,7 +142,7 @@ shiftRegister #(8) shiftRegSync(clk, rst_L, ld_sync, en_sync, 1'd0, sync, sync_o
 //shift register to hold pid
 shiftRegister #(8) shiftRegPid(clk, rst_L, ld_pid, en_pid, 1'd0, pid, pid_out);
 //shift register to hold DATA
-shiftRegister #(64) shiftRegData(clk, rst_L, ld_data, en_data, pause, data, crc16_in);
+shiftRegister #(64) shiftRegData(clk, rst_L, ld_data, en_data, pause, data_out, crc16_in);
 
 
 ///////////////////////////////////////////////////////////////
@@ -491,6 +491,19 @@ module shiftRegister
 	end
 endmodule: shiftRegister
 
+module mux4ways#(parameter w = 1) (input logic [1:0] sel,
+														input logic [w-1:0] inA,inB,inC,inD,
+														output logic [w-1:0] out);
+always_comb begin
+	case(sel)
+		2'd0:out = inA;
+		2'd1:out = inB;
+		2'd2:out = inC;
+		2'd3:out = inD;
+	endcase
+end
+endmodule:mux4ways
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                            SEND TOKEN FSM                                                     //
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -623,4 +636,242 @@ end
 		end
 	end
 endmodule: send_token
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+//                                               SEND_HAND                                     //
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+module send_ack_nak(input logic clk, rst_l, start, pause,  // ack or nak is determined by the higher FSM
+							 output logic do_eop,en_sync, en_pid, clear, ld_sync, ld_pid, sel_1,sel_2,enable_send,
+							 output logic done); // done signal sends to above.  
+
+	logic [4:0] sync_count, pid_count,token_count, eop_count;
+	logic [4:0] sync_add,pid_add, token_add, eop_add;
+	enum logic [2:0]  {IDLE, SYNC, PID, EOP} cs,ns;
+	logic clear_counter;
+always_comb begin
+	done = 1'b0;
+	sync_add = 5'b0;
+	pid_add =5'b0;
+	eop_add = 5'b0;
+	clear_counter=1'b0;
+	do_eop = 1'b0;
+	en_sync =1'b0;
+	en_pid = 1'b0;
+	clear = 1'b1;
+	ld_sync =1'b0;   //
+	ld_pid = 1'b0;    //
+	sel_1 =1'b0;      //
+	sel_2 =1'b0;     //
+	enable_send = 1'b0;
+	case(cs)
+		IDLE :begin
+				if(start) begin
+					ns = SYNC;
+					ld_sync <= 1'b1;
+					ld_pid <=1'b1;
+					sel_1 <=1'b1;
+					sel_2<=1'b0;
+					end
+				else ns = IDLE;    // wait for start signal. 
+		end
+		SYNC: begin
+			clear = 1'b0;
+			en_sync = 1'b1;
+			sel_1 = 1'b1;
+			sel_2 = 1'b0;
+			sync_add =1'b1;
+			enable_send =1'b1;
+			if(sync_count < 5'd7)begin
+				ns = SYNC;	
+			end
+			else ns = PID; 
+		end
+		PID: begin
+			clear = 1'b0;
+			en_pid = 1'b1;
+			sel_1 = 1'b0;
+			sel_2  = 1'b0;
+			pid_add = 1'b1;
+			enable_send =1'b1;
+			if(pid_count<5'd7) begin
+				ns = PID;
+			end
+			else ns = EOP;
+		end
+		EOP: begin
+			clear = 1'b0;
+			do_eop  = 1'b1;
+			eop_add =1'b1;
+			enable_send =1'b1;
+			if(eop_count <5'd2) begin
+				ns = EOP;
+			end
+			else begin
+				ns = IDLE;
+				done = 1'b1;
+				clear_counter =1'b1;
+				
+			end
+		end
+	endcase
+end
+
+	always_ff @(posedge clk, negedge rst_l) begin
+		if(~rst_l) begin
+			cs <=IDLE;
+			sync_count <= 5'b0;
+			pid_count <= 5'b0;
+			eop_count <= 5'b0;
+		end
+		else if(clear_counter) begin
+			cs <=ns;
+			sync_count <= 5'b0;
+			pid_count <= 5'b0;
+			eop_count <= 5'b0;
+		end
+		else if(pause) begin
+			cs <=cs;
+			sync_count <= sync_count;
+			pid_count <= pid_count;
+			eop_count <= eop_count;
+		end
+		else begin
+			cs <=ns;
+			sync_count <= sync_count + sync_add;
+			pid_count <= pid_count +pid_add;
+			eop_count <= eop_count + eop_add;
+		end
+	end
+endmodule: send_ack_nak
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+module send_data(input logic clk, rst_l, start, pause,
+							 output logic do_eop,en_sync,en_crc_L, en_pid, en_data, clear, ld_sync, ld_pid,ld_data, sel_1,sel_2,enable_send, clear_stuffer,
+							 output logic done); // done signal sends to above.
+
+	logic [4:0] sync_count, pid_count, eop_count;
+	logic [6:0] data_count;
+	logic [4:0] sync_add,pid_add, data_add, eop_add;
+	enum logic [2:0]  {IDLE, SYNC, PID, DATA, EOP} cs,ns;
+	logic clear_counter;
+always_comb begin
+	done = 1'b0;
+	clear_stuffer = 1'b1;
+	sync_add = 5'b0;
+	pid_add =5'b0;
+	data_add = 5'b0;
+	eop_add = 5'b0;
+	clear_counter=1'b0;
+	do_eop = 1'b0;
+	en_sync =1'b0;
+	en_crc_L = 1'b1;// has CRC off.
+	en_pid = 1'b0;
+	en_data = 1'b0;
+	clear = 1'b1;
+	ld_sync =1'b0;   //
+	ld_pid = 1'b0;    //
+	ld_data = 1'b0;    //
+	sel_1 =1'b0;      //
+	sel_2 =1'b0;     //
+	enable_send = 1'b0;
+	case(cs)
+		IDLE :begin
+				if(start) begin
+					ns = SYNC;
+					ld_sync <= 1'b1;
+					ld_pid <=1'b1;
+					ld_data <= 1'b1;
+					sel_1 <=1'b1;
+					sel_2<=1'b0;
+					end
+				else ns = IDLE;    // wait for start signal. 
+		end
+		SYNC: begin
+			clear = 1'b0;
+			en_sync = 1'b1;
+			sel_1 = 1'b1;
+			sel_2 = 1'b0;
+			sync_add =1'b1;
+			enable_send =1'b1;
+			if(sync_count < 5'd7)begin
+				ns = SYNC;	
+			end
+			else ns = PID; 
+		end
+		PID: begin
+			clear = 1'b0;
+			en_pid = 1'b1;
+			sel_1 = 1'b0;
+			sel_2  = 1'b0;
+			pid_add = 1'b1;
+			enable_send =1'b1;
+			if(pid_count<5'd7) begin
+				ns = PID;
+			end
+			else ns = DATA;
+		end
+		DATA:begin
+			clear_stuffer = 1'b0;
+			clear = 1'b0;
+			sel_1 = 1'b0;
+			sel_2 = 1'b1;
+			en_crc_L = 1'b0;
+			data_add =1'b1;
+			enable_send =1'b1;
+			if(data_count <7'd63) en_data =1'b1;
+			else en_data = 1'b0;
+			if(data_count < 7'd79) begin
+			ns = DATA;
+			end
+			else ns = EOP;
+		end
+		EOP: begin
+			clear = 1'b0;
+			en_crc_L =1'b1;
+			do_eop  = 1'b1;
+			eop_add =1'b1;
+			enable_send =1'b1;
+			if(eop_count <5'd2) begin
+				ns = EOP;
+			end
+			else begin
+				ns = IDLE;
+				done = 1'b1;
+				clear_counter =1'b1;
+				
+			end
+		end
+	endcase
+end
+
+	always_ff @(posedge clk, negedge rst_l) begin
+		if(~rst_l) begin
+			cs <=IDLE;
+			sync_count <= 5'b0;
+			pid_count <= 5'b0;
+			data_count <= 7'b0;
+			eop_count <= 5'b0;
+		end
+		else if(clear_counter) begin
+			cs <=ns;
+			sync_count <= 5'b0;
+			pid_count <= 5'b0;
+			data_count <= 5'b0;
+			eop_count <= 7'b0;
+		end
+		else if(pause) begin
+			cs <=cs;
+			sync_count <= sync_count;
+			pid_count <= pid_count;
+			data_count <= data_count;
+			eop_count <= eop_count;
+		end
+		else begin
+			cs <=ns;
+			sync_count <= sync_count + sync_add;
+			pid_count <= pid_count +pid_add;
+			data_count <= data_count +data_add;
+			eop_count <= eop_count + eop_add;
+		end
+	end
+endmodule: send_data
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
