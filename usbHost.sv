@@ -118,11 +118,11 @@ logic data_in_valid;
  //////////////////////////////////////////////////////////////////////////
  always_comb begin
  eop_valid =1'b0;
-	if(({wires.DP,wires.DM} == 2'b00)&&(counter_eop<2'b2)) begin
+	if(({wires.DP,wires.DM} == 2'd0)&&(counter_eop<2'd2)) begin
 		eop_count =1'b1; // count 2 consecutive XX
 	end
-	else if( counter_eop <2'b2) begin
-		eop_count =1b'0;
+	else if (counter_eop < 2'd2) begin
+		eop_count = 1'd0;
 	end
 	else if ({wires.DP,wires.DM} == 2'b10) begin
 		eop_count =1'b1; // see 2 consecutive XX follow by 1.
@@ -130,34 +130,35 @@ logic data_in_valid;
 	end
 	else eop_count =1'b0;
  end
-always_ff @(posedge clk, negedge rst_l) begin
-	if(~rst_l) counter_eop <= 3'd0;
+always_ff @(posedge clk, negedge rst_L) begin
+	if(~rst_L) counter_eop <= 3'd0;
 	else if(eop_count) counter_eop <= counter_eop +  3'd1;
 	else counter_eop <= 3'd0;
 end
  /////////////////////////////////////////////////////////////////////
  logic [63:0] msg_out;
+ logic [3:0] check_pid_out;
  logic msg_ok, done, receive, receive_hand, r_acknak_fail, ack, nak;
- logic r_data_start, r_data_finish, r_data_fail, r_data_success;
+ logic r_data_start, r_data_finish, r_data_fail, r_data_success, pause_receive;
  logic process_success, system_done;
  logic reverse_nrzi_in, reverse_nrzi_out, unstuff_out;
  assign reverse_nrzi_in = wires.DP; 
-reverse_nrzi takein(reverse_nrzi_in, clk, rst_l, ~data_in_valid , reverse_nrzi_out); 
+reverse_nrzi takein(reverse_nrzi_in, clk, rst_L, ~data_in_valid , reverse_nrzi_out); 
 // if data not valid, clear.
 logic clear_sync1, clear_sync2, valid_sync, pid_valid, clear_pid1, clear_pid2, clear_unstuff, clear_crc;
 // check sync
-check_sync checker(reverse_nrzi_out, clk, rst_l, (clear_sync1&&clear_sync2), valid_sync);
+check_sync checker(reverse_nrzi_out, clk, rst_L, (clear_sync1&&clear_sync2), valid_sync);
 ////////////////////////////
-check_pid testpid(reverse_nrzi_out, clk, rst_l, (clear_pid1&&clear_pid2), pid_valid,pid_out);
+check_pid testpid(reverse_nrzi_out, clk, rst_L, (clear_pid1&&clear_pid2), pid_valid, check_pid_out);
 ////////////////////////////
- reverse_stuffer unstuff(reverse_nrzi_out, clk, rst_l, clear_unstuff, unstuff_out, pause_receive); 
-receiver takecrc16(unstuff_out, rst_l, clk, pause_receive, clear_unstuff, clear_crc, msg_out, msg_ok,done);
+ reverse_stuffer unstuff(reverse_nrzi_out, clk, rst_L, clear_unstuff, unstuff_out, pause_receive); 
+receiver takecrc16(unstuff_out, rst_L, clk, pause_receive, clear_unstuff, clear_crc, msg_out, msg_ok,done);
 
 //receive_data fsm instantiation
-receive_data r_data_fsm(clk, rst_l, pause_receive, r_data_start, valid_sync, msg_ok, clear_sync1, r_data_finish, r_data_fail, r_data_success, clear_pid1, clear_crc, clear_unstuff);
+receive_data r_data_fsm(clk, rst_L, pause_receive, r_data_start, valid_sync, msg_ok, clear_sync1, r_data_finish, r_data_fail, r_data_success, clear_pid1, clear_crc, clear_unstuff);
 
 //receive_acknak fsm instantiation
-receive_acknak r_acknak_fsm(clk, rst_l, receive_hand, pid_out, r_acknak_fail, clear_pid2, clear_sync2, ack, nak, receive);
+receive_acknak r_acknak_fsm(clk, rst_L, receive_hand, valid_sync, check_pid_out, r_acknak_fail, clear_pid2, clear_sync2, ack, nak, receive);
 
 //////////   RECEIVES MAGIC BLOCK OF CODE ENDS HERE   //////////
 
@@ -248,7 +249,7 @@ endmodule: usbHost
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                       modified CRC 5 from hw2                                          //
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-module  sender(input logic bit_in, rst_l, clk, clear, pause,  //pause for bit stuffing
+module  sender(input logic bit_in, rst_L, clk, clear, pause,  //pause for bit stuffing
 						output logic send_bit);
 	logic [4:0] Q;
 	logic go;
@@ -257,13 +258,13 @@ module  sender(input logic bit_in, rst_l, clk, clear, pause,  //pause for bit st
 
 	assign send_bit = (mux) ?out_bit : bit_in; // mux output between incoming bit and complement
 	
-	senderFSM sendit(clk,rst_l,clear,pause,mux,go);
-	crcCal calcIt(send_bit,clk,rst_l,clear,pause, Q);
-	complementMake make(rst_l, go, clk,clear, pause,Q,out_bit);
+	senderFSM sendit(clk,rst_L,clear,pause,mux,go);
+	crcCal calcIt(send_bit,clk,rst_L,clear,pause, Q);
+	complementMake make(rst_L, go, clk,clear, pause,Q,out_bit);
 	
 endmodule: sender
 
-module senderFSM( input logic clk, rst_l, clear, pause,
+module senderFSM( input logic clk, rst_L, clear, pause,
 							  output logic mux,go);
 
 	logic [4:0] counter;
@@ -299,8 +300,8 @@ always_comb begin
 	endcase
 end
 
-always_ff @(posedge clk, negedge rst_l) begin
-		if(~rst_l) begin
+always_ff @(posedge clk, negedge rst_L) begin
+		if(~rst_L) begin
 			cs <= FIRST;
 			counter <= 5'b0;
 			end
@@ -319,10 +320,10 @@ always_ff @(posedge clk, negedge rst_l) begin
 	end
 endmodule:senderFSM
 
-module  crcCal(input logic bit_in,clk,rst_l, clear, pause, output logic [4:0] Q);
+module  crcCal(input logic bit_in,clk,rst_L, clear, pause, output logic [4:0] Q);
 
-always_ff @(posedge clk, negedge rst_l) begin
-		if(~rst_l)
+always_ff @(posedge clk, negedge rst_L) begin
+		if(~rst_L)
 			Q <= 5'b11111;
 		else if(clear) Q<= 5'b11111;
 		else if(pause) Q <= Q; //stall for one clock.
@@ -336,7 +337,7 @@ always_ff @(posedge clk, negedge rst_l) begin
 end
 endmodule: crcCal
 
-module complementMake(input logic rst_l, go, clk, clear, pause,
+module complementMake(input logic rst_L, go, clk, clear, pause,
 									  input logic [4:0] Q,
 										output logic oneBit);
 		logic [3:0] remainder;
@@ -345,8 +346,8 @@ module complementMake(input logic rst_l, go, clk, clear, pause,
 			if(go) oneBit = ~Q[4];
 			else oneBit = remainder[3]; // for subsequent clocks take output from shift register.
 		end
-		always_ff@(posedge clk, negedge rst_l) begin
-			if(~rst_l)
+		always_ff@(posedge clk, negedge rst_L) begin
+			if(~rst_L)
 				remainder <= 4'b0;
 			else if (clear ) remainder <=4'b0;
 			else if(pause) remainder <= remainder; //stall for one clock.
@@ -363,7 +364,7 @@ endmodule: complementMake
 //                                                           CRC16                                                            //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-module  sender16(input logic bit_in, rst_l, clk, clear, pause,  //pause for bit stuffing
+module  sender16(input logic bit_in, rst_L, clk, clear, pause,  //pause for bit stuffing
 						output logic send_bit);
 	logic [15:0] Q;
 	logic go;
@@ -372,13 +373,13 @@ module  sender16(input logic bit_in, rst_l, clk, clear, pause,  //pause for bit 
 
 	assign send_bit = (mux) ?out_bit : bit_in; // mux output between incoming bit and complement
 	
-	senderFSM16 sendit(clk,rst_l, clear, pause,mux,go);
-	crcCal16 calcIt(send_bit,clk,rst_l, clear, pause,Q);
-	complementMake16 make(rst_l,go,clk, clear, pause,Q,out_bit);
+	senderFSM16 sendit(clk,rst_L, clear, pause,mux,go);
+	crcCal16 calcIt(send_bit,clk,rst_L, clear, pause,Q);
+	complementMake16 make(rst_L,go,clk, clear, pause,Q,out_bit);
 	
 endmodule: sender16
 
-module senderFSM16( input logic clk, rst_l, clear, pause,
+module senderFSM16( input logic clk, rst_L, clear, pause,
 							  output logic mux,go);
 
 	logic [6:0] counter;
@@ -414,8 +415,8 @@ always_comb begin
 	endcase
 end
 
-always_ff @(posedge clk, negedge rst_l) begin
-		if(~rst_l) begin
+always_ff @(posedge clk, negedge rst_L) begin
+		if(~rst_L) begin
 			cs <= FIRST;
 			counter <= 7'd0;
 			end
@@ -434,10 +435,10 @@ always_ff @(posedge clk, negedge rst_l) begin
 	end
 endmodule:senderFSM16
 
-module  crcCal16(input logic bit_in,clk,rst_l, clear, pause, output logic [15:0] Q);
+module  crcCal16(input logic bit_in,clk,rst_L, clear, pause, output logic [15:0] Q);
 
-always_ff @(posedge clk, negedge rst_l) begin
-		if(~rst_l)
+always_ff @(posedge clk, negedge rst_L) begin
+		if(~rst_L)
 			Q <= 16'b1111_1111_1111_1111;
 		else if(clear) Q<= 16'hFFFF;
 		else if(pause) Q <= Q; //stall for one clock.
@@ -462,7 +463,7 @@ always_ff @(posedge clk, negedge rst_l) begin
 end
 endmodule: crcCal16
 
-module complementMake16(input logic rst_l, go, clk, clear, pause,
+module complementMake16(input logic rst_L, go, clk, clear, pause,
 									  input logic [15:0] Q,
 										output logic oneBit);
 		logic [14:0] remainder;
@@ -471,8 +472,8 @@ module complementMake16(input logic rst_l, go, clk, clear, pause,
 			if(go) oneBit = ~Q[15];
 			else oneBit = remainder[14]; // for subsequent clocks take output from shift register.
 		end
-		always_ff@(posedge clk, negedge rst_l) begin
-			if(~rst_l)
+		always_ff@(posedge clk, negedge rst_L) begin
+			if(~rst_L)
 				remainder <= 15'd0;
 			else if(clear) remainder <=15'd0;
 			else if(pause) remainder <= remainder; //stall for one clock.
@@ -489,7 +490,7 @@ endmodule: complementMake16
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-module stuffer(input logic bit_in, clk, rst_l, clear,
+module stuffer(input logic bit_in, clk, rst_L, clear,
 					 output logic bit_out, pause);  // stuff addr, endp,crc5,crc16, and DATA
 
 	logic [2:0] count;
@@ -504,8 +505,8 @@ else begin
 end
 end
  
-always_ff @(posedge clk, negedge rst_l)begin
-	if(~rst_l) count <= 0;   //reset
+always_ff @(posedge clk, negedge rst_L)begin
+	if(~rst_L) count <= 0;   //reset
 	else if (clear) count<=0;  // count up to 6 or found a zero. clear
 	else if(bit_in) count <= count +3'd1; // keep counting.
 	else count <=0;   //  found a 0, clear.
@@ -574,7 +575,7 @@ endmodule:mux4ways
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                            SEND TOKEN FSM                                                     //
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-module send_token(input logic clk, rst_l, start, pause,
+module send_token(input logic clk, rst_L, start, pause,
 							 output logic do_eop,en_sync,en_crc_L, en_pid, en_tok, clear, ld_sync, ld_pid,ld_tok, sel_1,sel_2,enable_send, clear_stuffer,
 							 output logic done); // done signal sends to above.
 
@@ -672,8 +673,8 @@ always_comb begin
 	endcase
 end
 
-	always_ff @(posedge clk, negedge rst_l) begin
-		if(~rst_l) begin
+	always_ff @(posedge clk, negedge rst_L) begin
+		if(~rst_L) begin
 			cs <=IDLE;
 			sync_count <= 5'b0;
 			pid_count <= 5'b0;
@@ -706,7 +707,7 @@ endmodule: send_token
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                               SEND_HAND                                     //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////
-module send_ack_nak(input logic clk, rst_l, start, pause,  // ack or nak is determined by the higher FSM
+module send_ack_nak(input logic clk, rst_L, start, pause,  // ack or nak is determined by the higher FSM
 							 output logic do_eop,en_sync, en_pid, clear, ld_sync, ld_pid, sel_1,sel_2,enable_send,
 							 output logic done); // done signal sends to above.  
 
@@ -782,8 +783,8 @@ always_comb begin
 	endcase
 end
 
-	always_ff @(posedge clk, negedge rst_l) begin
-		if(~rst_l) begin
+	always_ff @(posedge clk, negedge rst_L) begin
+		if(~rst_L) begin
 			cs <=IDLE;
 			sync_count <= 5'b0;
 			pid_count <= 5'b0;
@@ -811,7 +812,7 @@ end
 endmodule: send_ack_nak
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-module send_data(input logic clk, rst_l, start, pause,
+module send_data(input logic clk, rst_L, start, pause,
 							 output logic do_eop,en_sync,en_crc_L, en_pid, en_data, clear, ld_sync, ld_pid,ld_data, sel_1,sel_2,enable_send, clear_stuffer,
 							 output logic done); // done signal sends to above.
 
@@ -910,8 +911,8 @@ always_comb begin
 	endcase
 end
 
-	always_ff @(posedge clk, negedge rst_l) begin
-		if(~rst_l) begin
+	always_ff @(posedge clk, negedge rst_L) begin
+		if(~rst_L) begin
 			cs <=IDLE;
 			sync_count <= 5'b0;
 			pid_count <= 5'b0;
@@ -946,7 +947,7 @@ endmodule: send_data
 
 /*****TOP_FSM*****/
 
-module top_fsm (input logic clk, rst_l,
+module top_fsm (input logic clk, rst_L,
 						input logic start, read_write,                          //read_write = 0 = read, =1 = write.
 						input logic done_send_token, done_send_data, done_send_hand, receive, ack, nak, r_hand_fail, r_data_finish, r_data_fail, r_data_success,
 						output logic start_send_token, start_send_data, start_send_hand,
@@ -956,7 +957,7 @@ module top_fsm (input logic clk, rst_l,
 	enum logic [2:0]  {IDLE, SEND_TOKEN, SEND_DATA, RECEIVE_HAND, SEND_HAND,RECEIVE_DATA} cs,ns;
 
 	logic clr_remember, ld_remember;
-	logic [1:0] remember,remember_new;; //10 = ACK  01 = NAK
+	logic [1:0] remember,remember_new; //10 = ACK  01 = NAK
 	logic [3:0] r_fail_count, r_hand_fail_count;
 	logic r_fail_done, r_hand_fail_done;
 	logic [7:0] pid_reg;
@@ -968,7 +969,7 @@ module top_fsm (input logic clk, rst_l,
 		start_send_data =1'b0;
 		start_send_hand = 1'b0;
 		pid_reg = 8'b0;
-		fail_count_new = fail_count;
+		//fail_count_new = fail_count;
 		r_data_start = 0;
 		process_success = 0;
 		system_done = 0;
@@ -982,10 +983,10 @@ module top_fsm (input logic clk, rst_l,
 					ns = SEND_TOKEN;
 					start_send_token =1'b1; // start the first fsm.
 					if(read_write)begin // write
-						pid = 8'b1000_0111;
+						pid_reg = 8'b1000_0111;
 					end
 					else begin// read, has different pid.
-						pid = 8'b1001_0110;
+						pid_reg = 8'b1001_0110;
 					end
 				end
 				else
@@ -996,7 +997,7 @@ module top_fsm (input logic clk, rst_l,
 					if(read_write) begin// write
 						ns = SEND_DATA; // start sending data
 						start_send_data =1'b1; //start send_data fsm
-						pid = 8'b1100_0011;
+						pid_reg = 8'b1100_0011;
 					end
 					else begin //read
 						ns = RECEIVE_DATA; //start receiving data
@@ -1020,7 +1021,7 @@ module top_fsm (input logic clk, rst_l,
 					if (!r_hand_fail_done) begin
 						ns = SEND_DATA;
 						start_send_data =1'b1; //try again
-						pid = 8'b1100_0011;
+						pid_reg = 8'b1100_0011;
 					end
 					else begin
 						//give up
@@ -1063,8 +1064,8 @@ module top_fsm (input logic clk, rst_l,
 					if(!r_fail_done) begin
 						ns = SEND_HAND;
 						start_send_hand = 1'b1;
-						pid_reg= 8'b0101_1010;
-						ld_remember 1'b1;
+						pid_reg = 8'b0101_1010;
+						ld_remember = 1'b1;
 						remember_new = 2'b01; //NAK
 						//sendNAK!
 					end
@@ -1078,8 +1079,8 @@ module top_fsm (input logic clk, rst_l,
 				else if (r_data_finish && r_data_success) begin
 					ns = SEND_HAND;
 					start_send_hand =1'b1;
-					pid_reg= 8'b0100_1011;
-					ld_remember =1'b1;
+					pid_reg = 8'b0100_1011;
+					ld_remember = 1'b1;
 					remember_new = 2'b10; //ACK
 					//sendACK!
 				end
@@ -1087,15 +1088,15 @@ module top_fsm (input logic clk, rst_l,
 		endcase
 	end
 	
-always_ff @(posedge clk, negedge rst_l)begin //mini- register
-	if(~rst_l) remember <= 2'b0;
+always_ff @(posedge clk, negedge rst_L)begin //mini- register
+	if(~rst_L) remember <= 2'b0;
 	else if( clr_remember) remember<=2'b0;
 	else if( ld_remember) remember <= remember_new;
 	else remember <= remember;
 end
 	
-	always_ff @(posedge clk, negedge rst_l) begin
-		if(~rst_l) begin
+	always_ff @(posedge clk, negedge rst_L) begin
+		if(~rst_L) begin
 			cs <= IDLE;
 			r_fail_count <= 4'd0;
 			r_hand_fail_count <= 4'd0;
@@ -1110,10 +1111,11 @@ end
 endmodule: top_fsm
 
 /*****RECEIVE DATAPATH AND FSMS*****/
-module reverse_stuffer(input logic bit_in, clk, rst_l, clear,
+module reverse_stuffer(input logic bit_in, clk, rst_L, clear,
 									output logic bit_out, pause);  // unstuff stuff
 								//just let the other part of the system know which
 								// value to ignore. bit_out doesn't matter.
+logic [2:0] count;
 
 	always_comb begin
 if(count ==3'd6)begin // found 6 ones, stuff a 0, pause for 1 clock
@@ -1125,19 +1127,16 @@ else begin
 	bit_out = bit_in;
 end
 end
-always_ff @(posedge clk, negedge rst_l)begin
-	if(~rst_l) count <= 0;   //reset
+always_ff @(posedge clk, negedge rst_L)begin
+	if(~rst_L) count <= 0;   //reset
 	else if (clear) count<=0;  // count up to 6 or found a zero. clear
 	else if(bit_in) count <= count +3'd1; // keep counting.
 	else count <=0;   //  found a 0, clear.
 end
 	
-endmodule:stuffer
-					 
-					 
 endmodule: reverse_stuffer
 
-module reverse_nrzi(logic input bit_in, clk, rst_L, clear,
+module reverse_nrzi(input logic bit_in, clk, rst_L, clear,
 								output logic bit_out);
 								
 logic past;
@@ -1154,33 +1153,33 @@ always_ff @(posedge clk, negedge rst_L) begin
 	end	
 endmodule: reverse_nrzi
 
-module check_sync(logic input bit_in, clk, rst_l, clear, 
+module check_sync(input logic bit_in, clk, rst_L, clear, 
 								output logic valid);
 // start looking after if clear is not asserted. If sees the right pattern, keep incrementing counter.					
 logic [3:0]	counter, counter_new;				
 always_comb begin
 		counter_new = 4'b0;
 		valid =1'b0;
-	if((counter <= 4'b6)&&(bit_in ==1'b0)) begin
+	if((counter <= 4'd6)&&(bit_in ==1'b0)) begin
 		counter_new = counter +4'b1; // sees 0,
 	end
-	else if ((counter ==4'b7)&&(bit_in == 1'b1)) begin
+	else if ((counter ==4'd7)&&(bit_in == 1'b1)) begin
 		counter_new = counter +4'b1; // sees 1,
 	end
-	else if (counter ==4'b8) begin // pattern found.
+	else if (counter ==4'd8) begin // pattern found.
 		valid =1'b0;
 		counter_new = 4'b0; //reset counter
 	end
 	else	counter_new =4'b0; // reset counter if pattern doesn't match
 end
-always_ff @(posedge clk, negedge rst_l) begin
-		if(!rst_l) counter <= 4'b0;
+always_ff @(posedge clk, negedge rst_L) begin
+		if(!rst_L) counter <= 4'b0;
 		else if( clear )  counter <= 4'b0;
 		else counter <= counter_new;
 end
 endmodule: check_sync
 
-module check_pid(input logic bit_in, clk, rst_l, clear,
+module check_pid(input logic bit_in, clk, rst_L, clear,
 							output logic pid_valid,
 							output logic[3:0]  Q);// take in LSB pid, 
 							// reverse order to MSB and output if the pid is correct.
@@ -1199,8 +1198,8 @@ always_comb begin
 		pid_valid =1'b0;
 	end
 end
-always_ff @(posedge clk, negedge rst_l) begin
-	if(~rst_l) holder <= 8'b0;
+always_ff @(posedge clk, negedge rst_L) begin
+	if(~rst_L) holder <= 8'b0;
 	else if (clear ) holder<= 8'b0;
 	else begin
 		holder <= {holder[7:1],bit_in};
@@ -1210,23 +1209,23 @@ endmodule: check_pid
 
 ///////////////////////////////////////////////////////////////////////////////
 
-module receiver(input logic bit_in, rst_l, clk, pause, clear_data, clear_crc,
+module receiver(input logic bit_in, rst_L, clk, pause, clear_data, clear_crc,
 				output logic [63:0] msg_out, output logic msg_ok,done);
 	
 	logic [63:0] temp;
 	logic [15:0] Q;
 	logic shift_it, check_it;
 	
-	crcCal16 calcGot16(bit_in,clk,rst_l,clear_crc,pause,Q);
-	receiverFSM get(clk,rst_l,pause,(clear_data&&clear_crc),shift_it,check_it);
+	crcCal16 calcGot16(bit_in,clk,rst_L,clear_crc,pause,Q);
+	receiverFSM get(clk,rst_L,pause,(clear_data&&clear_crc),shift_it,check_it);
 	assign msg_out = temp;
 	always_comb begin // check ok signal
 		if(check_it) msg_ok = (Q == 16'h8005) ? 1'b1: 1'b0;
 		else msg_ok =1'b0;
 		done = check_it;
 	end	
-	always_ff @(posedge clk, negedge rst_l) begin //register to hold msg
-		if(~rst_l)
+	always_ff @(posedge clk, negedge rst_L) begin //register to hold msg
+		if(~rst_L)
 			temp <= 64'b0;
 		else if (clear_data&&clear_crc)
 			temp <= 64'd0;
@@ -1239,7 +1238,7 @@ module receiver(input logic bit_in, rst_l, clk, pause, clear_data, clear_crc,
 	end
 endmodule: receiver
 
-module receiverFSM(input logic clk, rst_l, pause, clear,
+module receiverFSM(input logic clk, rst_L, pause, clear,
 				output logic shift_it,check_it);
 
 	logic [6:0] counter;
@@ -1263,7 +1262,7 @@ always_comb begin
 				end
 			end
 		COMP: begin
-					ns = (counter>=5'd80)? DEAD: COMP;
+					ns = (counter>=7'd80)? DEAD: COMP;
 					end
 		DEAD: begin
 					ns = DOWN;
@@ -1273,8 +1272,8 @@ always_comb begin
 	endcase
 end
 
-always_ff @(posedge clk, negedge rst_l) begin
-		if(~rst_l) begin
+always_ff @(posedge clk, negedge rst_L) begin
+		if(~rst_L) begin
 			cs <= FIRST;
 			counter <= 7'b0;
 			end
@@ -1308,7 +1307,7 @@ module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync, cor
 	logic [5:0] data_count;
 	logic [3:0] crc_count;
 	logic [1:0] eop_count;
-	logic timeout_add, timedOut, pid_add, pidDone, data_add, dataDone, en_crc_L, crc_add, crcDone, eop_add, eopDone;
+	logic timeout_add, timedOut, pid_add, pidDone, data_add, dataDone, crc_add, crcDone, eop_add, eopDone;
 
 	assign timedOut = timeout_count == 8'd255;
 	assign pidDone = pid_count == 3'd7;
@@ -1412,12 +1411,13 @@ module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync, cor
 			crc_count <= crc_count + crc_add;
 			eop_count <= eop_count + eop_add;
 		end
+	end
 
 endmodule: receive_data
 
 /*****RECEIVE_ACKNAK FSM*****/
 
-module receive_acknak(input logic clk, rst_L, receive_hand,
+module receive_acknak(input logic clk, rst_L, receive_hand, valid_sync,
 					input logic [3:0] pid,
 					output logic fail, en_pid_L, en_sync_L, ack, nak, receive);
 
@@ -1471,13 +1471,14 @@ module receive_acknak(input logic clk, rst_L, receive_hand,
 					else if (pid == 4'b1010) //nak
 						ns = WAITEOP2;
 				end
-				ns = pidDone ? READDATA : READPID;
+				else
+					ns = READPID;
 				en_pid_L = 0;
 			end
 			WAITEOP1: begin //ack
 				eop_add = 1;
 				ack = eopDone ? 1 : 0;
-				receive = eopDone ? 1 : 0
+				receive = eopDone ? 1 : 0;
 				ns = eopDone ? IDLE : WAITEOP1;
 			end
 			WAITEOP2: begin //nak
@@ -1496,17 +1497,12 @@ module receive_acknak(input logic clk, rst_L, receive_hand,
 			pid_count <= 3'd0;
 			eop_count <= 2'd0;
 		end
-		else if (pause) begin
-			cs <= cs;
-			timeout_count <= timeout_count;
-			pid_count <= pid_count;
-			eop_count <= eop_count;
-		end
 		else begin
 			cs <= ns;
 			timeout_count <= timeout_count + timeout_add;
 			pid_count <= pid_count + pid_add;
 			eop_count <= eop_count + eop_add;
 		end
+	end
 
 endmodule: receive_acknak
