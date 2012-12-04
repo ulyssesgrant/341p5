@@ -1,6 +1,6 @@
 module top_fsm(input logic clk, rst_l,
 						input logic start, read_write,                          //read_write = 0 = read, =1 = write.
-						input logic done_send_token, done_send_data, done_send_hand, r_fail, receive, ack, nak, r_hand_fail, r_data_finish, r_data_fail, r_data_success
+						input logic done_send_token, done_send_data, done_send_hand, receive, ack, nak, r_hand_fail, r_data_finish, r_data_fail, r_data_success
 						output logic start_send_token, start_send_data, start_send_hand,
 						output logic [1:0] mode, // 0  = send_token 1 = send_data, 2 = send_hand
 						output logic r_data_start, process_success, system_done, r_hand);
@@ -154,9 +154,8 @@ end
 		end
 		else begin
 			cs <= ns;
-			r_fail_count <= r_fail_count + r_fail;
+			r_fail_count <= r_fail_count + r_data_fail;
 			r_hand_fail_count <= r_hand_fail_count + (r_hand_fail || nak);
 		end
 	end
-endmodule: send_data
-//////////////////////////////////////////////////////////////////////////////////////////////////////////
+endmodule: top_fsm

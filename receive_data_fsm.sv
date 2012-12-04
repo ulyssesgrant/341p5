@@ -1,5 +1,5 @@
 module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync, correct,
-					output logic en_sync_L, fail, success, en_pid_L, en_crc_L, en_unstuff_L);
+					output logic en_sync_L, finish, fail, success, en_pid_L, en_crc_L, en_unstuff_L);
 
 	//en_pid_L is clear_pid in datapath
 
