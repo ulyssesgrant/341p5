@@ -26,12 +26,10 @@ module usbHost
   wait(usbHost.done_send_token);
   usbHost.start_send_token<= 1'b0;
   */
-
    usbHost.mode = 2'd1;
   usbHost.start_send_data <=1'b1;
   wait(usbHost.done_send_data);
   usbHost.start_send_data<= 1'b0;
-  
   /*
    usbHost.mode = 2'd2;
   usbHost.start_send_hand <=1'b1;
@@ -68,6 +66,7 @@ logic sel_1, sel_2, sel_3; //sel_1 for sync or pid, sel_2 for nrzi input, sel_3 
 logic [10:0] token;
 logic [63:0] data_out;
 logic [7:0] sync, pid;
+assign sync = 8'b0000_0001; // a constant
 logic clear_sender;
 logic done_send_token,start_send_token;
 logic clear_stuffer;
@@ -109,7 +108,7 @@ logic data_in_valid;
 	data_in_valid = 1'b0;
  end
  else begin //activate nrzi 
-	data_in_valid = 1'b0;
+	data_in_valid = 1'b1;
  end
  end
  // check eop
@@ -147,7 +146,7 @@ reverse_nrzi takein(reverse_nrzi_in, clk, rst_L, ~data_in_valid , reverse_nrzi_o
 // if data not valid, clear.
 logic clear_sync1, clear_sync2, valid_sync, pid_valid, clear_pid1, clear_pid2, clear_unstuff, clear_crc;
 // check sync
-check_sync checker(reverse_nrzi_out, clk, rst_L, (clear_sync1&&clear_sync2), valid_sync);
+check_sync checker(reverse_nrzi_out, clk, rst_L,data_in_valid, (clear_sync1&&clear_sync2), valid_sync);
 ////////////////////////////
 check_pid testpid(reverse_nrzi_out, clk, rst_L, (clear_pid1&&clear_pid2), pid_valid, check_pid_out);
 ////////////////////////////
@@ -164,7 +163,8 @@ receive_acknak r_acknak_fsm(clk, rst_L, receive_hand, valid_sync, check_pid_out,
 
 
 /***top_fsm***/
-top_fsm topFSM(clk, rst_L, start_top, read_write, done_send_token, done_send_data, done_send_hand, receive, ack, nak, r_acknak_fail, r_data_finish, r_data_fail, r_data_success, start_send_token, start_send_data, start_send_hand, mode, r_data_start, process_success, system_done, receive_hand);
+top_fsm topFSM(clk, rst_L, start_top, read_write, done_send_token, done_send_data, done_send_hand, receive, ack, nak, r_acknak_fail, r_data_finish, 
+r_data_fail, r_data_success, start_send_token, start_send_data, start_send_hand, mode, r_data_start, process_success, system_done, receive_hand);
 
 
 
@@ -969,7 +969,6 @@ module top_fsm (input logic clk, rst_L,
 		start_send_data =1'b0;
 		start_send_hand = 1'b0;
 		pid_reg = 8'b0;
-		//fail_count_new = fail_count;
 		r_data_start = 0;
 		process_success = 0;
 		system_done = 0;
@@ -977,6 +976,7 @@ module top_fsm (input logic clk, rst_L,
 		remember_new = 2'b0;
 		clr_remember =1'b0;
 		ld_remember = 1'b0;
+		mode = 2'b3;
 		case(cs)
 			IDLE :begin
 				if(start) begin
@@ -984,15 +984,18 @@ module top_fsm (input logic clk, rst_L,
 					start_send_token =1'b1; // start the first fsm.
 					if(read_write)begin // write
 						pid_reg = 8'b1000_0111;
+						mode = 2b0;
 					end
 					else begin// read, has different pid.
 						pid_reg = 8'b1001_0110;
+						mode = 2'b0;
 					end
 				end
 				else
 					ns = IDLE;
 			end
 			SEND_TOKEN:begin
+				mode= 2'b0;
 				if(done_send_token) begin
 					if(read_write) begin// write
 						ns = SEND_DATA; // start sending data
@@ -1008,6 +1011,7 @@ module top_fsm (input logic clk, rst_L,
 				else ns = SEND_TOKEN; //stay here till done signal is seen.
 			end
 			SEND_DATA:begin
+				mode =2'd1;
 				if(done_send_data)begin 
 					ns = RECEIVE_HAND; // finished sending, time to look for handshake
 					r_hand = 1; // start handshake fsm
@@ -1039,6 +1043,7 @@ module top_fsm (input logic clk, rst_L,
 				end
 			end
 			SEND_HAND:begin
+				mode = 2'd2;
 				if(done_send_hand)begin //send_hand is finished
 					if(remember == 2'b10) begin //it's a ACK
 						process_success = 1; // complete successfully.
@@ -1101,6 +1106,11 @@ end
 			r_fail_count <= 4'd0;
 			r_hand_fail_count <= 4'd0;
 		end
+		else if(clr_remember) begin
+			cs <= ns;
+			r_fail_count <= 4'd0;
+			r_hand_fail_count <= 4'd0;
+		end
 		else begin
 			cs <= ns;
 			r_fail_count <= r_fail_count + r_data_fail;
@@ -1153,7 +1163,7 @@ always_ff @(posedge clk, negedge rst_L) begin
 	end	
 endmodule: reverse_nrzi
 
-module check_sync(input logic bit_in, clk, rst_L, clear, 
+module check_sync(input logic bit_in, clk, rst_L, data_in_valid, clear, 
 								output logic valid);
 // start looking after if clear is not asserted. If sees the right pattern, keep incrementing counter.					
 logic [3:0]	counter, counter_new;				
@@ -1175,6 +1185,7 @@ end
 always_ff @(posedge clk, negedge rst_L) begin
 		if(!rst_L) counter <= 4'b0;
 		else if( clear )  counter <= 4'b0;
+		else if (~data_in_valid) counter <= 4'b0; // if data in is not valid, don't start counting.
 		else counter <= counter_new;
 end
 endmodule: check_sync
