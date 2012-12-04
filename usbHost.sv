@@ -63,7 +63,7 @@ module usbHost
   // usbHost starts here!!
 logic nrzi_in, nrzi_out, clear, start, wiresDP, wiresDM;
 logic stuffer_in, stuffer_out, pause, crc_in, crc16_in, crc_out, crc16_out, en_crc_L, sync_out, pid_out, sync_pid_out;
-logic ld_tok, en_tok, ld_sync, en_sync, ld_pid, en_pid, ld_data, en_data, enable_send, do_eop;
+logic ld_tok, en_tok, ld_sync, en_sync, ld_pid, en_pid, enable_send, do_eop;
 logic sel_1, sel_2, sel_3; //sel_1 for sync or pid, sel_2 for nrzi input, sel_3 for crc16 or crc5
 logic [10:0] token;
 logic [63:0] data_out;
@@ -142,7 +142,7 @@ shiftRegister #(8) shiftRegSync(clk, rst_L, ld_sync, en_sync, 1'd0, sync, sync_o
 //shift register to hold pid
 shiftRegister #(8) shiftRegPid(clk, rst_L, ld_pid, en_pid, 1'd0, pid, pid_out);
 //shift register to hold DATA
-shiftRegister #(64) shiftRegData(clk, rst_L, ld_data, en_data, pause, data_out, crc16_in);
+shiftRegister #(64) shiftRegData(clk, rst_L, ld_data_data, en_data_data, pause, data_out, crc16_in);
 
 
 ///////////////////////////////////////////////////////////////
@@ -334,7 +334,7 @@ always_comb begin
 				ns= DATA;
 			end
 		COMP:begin
-		        if(counter >= 7'd80) begin
+		        if(counter >= 7'd79) begin
 					ns = DEAD;
 					mux = 1'b1;
 				end
