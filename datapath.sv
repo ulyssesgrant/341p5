@@ -37,22 +37,22 @@ end
  assign reverse_nrzi_in = wires.DP; 
 reverse_nrzi takein(reverse_nrzi_in, clk, rst_l, ~data_in_valid , reverse_nrzi_out); 
 // if data not valid, clear.
-logic clear_sync, valid_sync, pid_valid, clear_pid, clear_unstuff, clear_crc;
+logic clear_sync1, clear_sync2, valid_sync, pid_valid, clear_pid1, clear_pid2, clear_unstuff, clear_crc;
 // check sync
-check_sync checker(reverse_nrzi_out, clk, rst_l, clear_sync, valid_sync);
+check_sync checker(reverse_nrzi_out, clk, rst_l, (clear_sync1&&clear_sync2), valid_sync);
 ////////////////////////////
-check_pid testpid(reverse_nrzi_out, clk, rst_l, clear_pid, pid_valid,pid_out);
+check_pid testpid(reverse_nrzi_out, clk, rst_l, (clear_pid1&&clear_pid2), pid_valid,pid_out);
 ////////////////////////////
  reverse_stuffer unstuff(reverse_nrzi_out, clk, rst_l, clear_unstuff, unstuff_out, pause_receive); 
 receiver takecrc16(unstuff_out, rst_l, clk, pause_receive, clear_unstuff, clear_crc, msg_out, msg_ok,done);
 
 //receive_data fsm instantiation
-receive_data r_data_fsm(clk, rst_l, pause_receive, r_data_start, valid_sync, msg_ok, clear_sync, r_data_fail, r_data_success, clear_pid, clear_crc, clear_unstuff)
+receive_data r_data_fsm(clk, rst_l, pause_receive, r_data_start, valid_sync, msg_ok, clear_sync1, r_data_fail, r_data_success, clear_pid1, clear_crc, clear_unstuff)
 //^todo: attach r_data_start,r_data_fail,r_data_success to the top fsm.
 //and add a clear_crc to the crc module in the receiver datapath
 
 //receive_acknak fsm instantiation
-receive_acknak r_acknak_fsm(clk, rst_l, receive_hand, pid_out, r_acknak_fail, clear_pid, clear_sync, ack, nak, receive)
+receive_acknak r_acknak_fsm(clk, rst_l, receive_hand, pid_out, r_acknak_fail, clear_pid2, clear_sync2, ack, nak, receive)
 //^todo: attach receive_hand, r_acknak_fail, ack, nak, receive to top fsm
 
  
