@@ -76,12 +76,14 @@ module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync,
 				eop_add = 1;
 				finish = eopDone ? 1 : 0;
 				success = 0;
+				fail = eopDone ? 1 : 0;
 				ns = eopDone ? IDLE : WAITEOP1;
 			end
 			WAITEOP2: begin
 				eop_add = 1;
 				finish = eopDone ? 1 : 0;
 				success = eopDone ? 1 : 0;
+				fail = 0;
 				ns = eopDone ? IDLE : WAITEOP2;
 			end
 		endcase

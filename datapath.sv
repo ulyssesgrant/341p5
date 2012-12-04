@@ -44,7 +44,7 @@ check_sync checker(reverse_nrzi_out, clk, rst_l, clear_sync, valid_sync);
 check_pid testpid(reverse_nrzi_out, clk, rst_l, clear_pid, pid_valid,pid_out);
 ////////////////////////////
  reverse_stuffer unstuff(reverse_nrzi_out, clk, rst_l, clear_unstuff, unstuff_out, pause_receive); 
-receiver takecrc16(unstuff_out, rst_l, clk, pause_receive, msg_out, msg_ok,done);
+receiver takecrc16(unstuff_out, rst_l, clk, pause_receive, clear_unstuff, clear_crc, msg_out, msg_ok,done);
 
 //receive_data fsm instantiation
 receive_data r_data_fsm(clk, rst_l, pause_receive, r_data_start, valid_sync, clear_sync, r_data_fail, r_data_success, clear_pid, clear_crc, clear_unstuff)
@@ -168,15 +168,15 @@ endmodule: check_pid
 
 ///////////////////////////////////////////////////////////////////////////////
 
-module receiver(input logic bit_in, rst_l, clk, pause
-						 output logic [63:0] msg_out, output logic msg_ok,done);
+module receiver(input logic bit_in, rst_l, clk, pause, clear_data, clear_crc,
+				output logic [63:0] msg_out, output logic msg_ok,done);
 	
 	logic [63:0] temp;
 	logic [15:0] Q;
 	logic shift_it, check_it;
 	
-	crcCal16 calcGot16(bit_in,clk,rst_l,pause,Q);
-	receiverFSM get(clk,rst_l, pause, shift_it,check_it);
+	crcCal16 calcGot16(bit_in,clk,rst_l,clear_crc,pause,Q);
+	receiverFSM get(clk,rst_l,pause,(clear_data&&clear_crc),shift_it,check_it);
 	assign msg_out = temp;
 	always_comb begin // check ok signal
 		if(check_it) msg_ok = (Q == 16'h8005) ? 1'b1: 1'b0;
@@ -186,6 +186,8 @@ module receiver(input logic bit_in, rst_l, clk, pause
 	always_ff @(posedge clk, negedge rst_l) begin //register to hold msg
 		if(~rst_l)
 			temp <= 64'b0;
+		else if (clear_data&&clear_crc)
+			temp <= 64'd0;
 		else if (shift_it) begin //shift signal control for first 11 shift by FSM
 			temp[63:1] <=temp[62:0];
 			temp[0] <= bit_in;
@@ -195,8 +197,8 @@ module receiver(input logic bit_in, rst_l, clk, pause
 	end
 endmodule: receiver
 
-module receiverFSM(input logic clk, rst_l, pause
-								output logic shift_it,check_it);
+module receiverFSM(input logic clk, rst_l, pause, clear,
+				output logic shift_it,check_it);
 
 	logic [6:0] counter;
 	enum logic [2:0]  { FIRST, DATA,COMP, DEAD,DOWN} cs,ns;
@@ -330,12 +332,14 @@ module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync,
 				eop_add = 1;
 				finish = eopDone ? 1 : 0;
 				success = 0;
+				fail = eopDone ? 1 : 0;
 				ns = eopDone ? IDLE : WAITEOP1;
 			end
 			WAITEOP2: begin
 				eop_add = 1;
 				finish = eopDone ? 1 : 0;
 				success = eopDone ? 1 : 0;
+				fail = 0;
 				ns = eopDone ? IDLE : WAITEOP2;
 			end
 		endcase
