@@ -37,7 +37,7 @@ end
  assign reverse_nrzi_in = wires.DP; 
 reverse_nrzi takein(reverse_nrzi_in, clk, rst_l, ~data_in_valid , reverse_nrzi_out); 
 // if data not valid, clear.
-logic clear_sync, valid_sync, pid_valid, clear_pid, clear_unstuff;
+logic clear_sync, valid_sync, pid_valid, clear_pid, clear_unstuff, clear_crc;
 // check sync
 check_sync checker(reverse_nrzi_out, clk, rst_l, clear_sync, valid_sync);
 ////////////////////////////
