@@ -16,9 +16,6 @@ module usbHost
   
   usbHost.token = 11'b1010000_0010;
   usbHost.data_out =64'hDEADBEEF1987CAFE;
-  usbHost.sync = 8'b0000_0001;
-  usbHost.mode = 2'b0;
-  usbHost.pid = 8'b1000_0111;
   
   /*
   usbHost.mode = 2'd0;
@@ -26,10 +23,12 @@ module usbHost
   wait(usbHost.done_send_token);
   usbHost.start_send_token<= 1'b0;
   */
+  /*
    usbHost.mode = 2'd1;
   usbHost.start_send_data <=1'b1;
   wait(usbHost.done_send_data);
   usbHost.start_send_data<= 1'b0;
+  */
   /*
    usbHost.mode = 2'd2;
   usbHost.start_send_hand <=1'b1;
@@ -164,7 +163,7 @@ receive_acknak r_acknak_fsm(clk, rst_L, receive_hand, valid_sync, check_pid_out,
 
 /***top_fsm***/
 top_fsm topFSM(clk, rst_L, start_top, read_write, done_send_token, done_send_data, done_send_hand, receive, ack, nak, r_acknak_fail, r_data_finish, 
-r_data_fail, r_data_success, start_send_token, start_send_data, start_send_hand, mode, r_data_start, process_success, system_done, receive_hand);
+r_data_fail, r_data_success, start_send_token, start_send_data, start_send_hand, mode,pid, r_data_start, process_success, system_done, receive_hand);
 
 
 
@@ -952,6 +951,7 @@ module top_fsm (input logic clk, rst_L,
 						input logic done_send_token, done_send_data, done_send_hand, receive, ack, nak, r_hand_fail, r_data_finish, r_data_fail, r_data_success,
 						output logic start_send_token, start_send_data, start_send_hand,
 						output logic [1:0] mode, // 0  = send_token 1 = send_data, 2 = send_hand
+						output logic [7:0] pid_reg,
 						output logic r_data_start, process_success, system_done, r_hand);
 
 	enum logic [2:0]  {IDLE, SEND_TOKEN, SEND_DATA, RECEIVE_HAND, SEND_HAND,RECEIVE_DATA} cs,ns;
@@ -960,7 +960,7 @@ module top_fsm (input logic clk, rst_L,
 	logic [1:0] remember,remember_new; //10 = ACK  01 = NAK
 	logic [3:0] r_fail_count, r_hand_fail_count;
 	logic r_fail_done, r_hand_fail_done;
-	logic [7:0] pid_reg;
+
 	assign r_fail_done = (r_fail_count == 4'd8);
 	assign r_hand_fail_done = (r_hand_fail_count == 4'd8);
 
@@ -984,7 +984,7 @@ module top_fsm (input logic clk, rst_L,
 					start_send_token =1'b1; // start the first fsm.
 					if(read_write)begin // write
 						pid_reg = 8'b1000_0111;
-						mode = 2'd0;
+						mode = 2'b0;
 					end
 					else begin// read, has different pid.
 						pid_reg = 8'b1001_0110;
@@ -1162,7 +1162,6 @@ always_ff @(posedge clk, negedge rst_L) begin
 	else past <= bit_in;
 	end	
 endmodule: reverse_nrzi
-
 module check_sync(input logic bit_in, clk, rst_L, data_in_valid, clear, 
 								output logic valid);
 // start looking after if clear is not asserted. If sees the right pattern, keep incrementing counter.					
@@ -1173,14 +1172,12 @@ always_comb begin
 	if((counter <= 4'd6)&&(bit_in ==1'b0)) begin
 		counter_new = counter +4'b1; // sees 0,
 	end
-	else if ((counter ==4'd7)&&(bit_in == 1'b1)) begin
-		counter_new = counter +4'b1; // sees 1,
-	end
-	else if (counter ==4'd8) begin // pattern found.
-		valid =1'b0;
+	else	counter_new =4'b0; // reset counter if pattern doesn't match
+	
+	if ((counter ==4'd7)&&(bit_in)) begin // pattern found.
+		valid =1'b1;
 		counter_new = 4'b0; //reset counter
 	end
-	else	counter_new =4'b0; // reset counter if pattern doesn't match
 end
 always_ff @(posedge clk, negedge rst_L) begin
 		if(!rst_L) counter <= 4'b0;
@@ -1213,7 +1210,7 @@ always_ff @(posedge clk, negedge rst_L) begin
 	if(~rst_L) holder <= 8'b0;
 	else if (clear ) holder<= 8'b0;
 	else begin
-		holder <= {holder[7:1],bit_in};
+		holder <= {holder[6:0],bit_in};
 	end
 end
 endmodule: check_pid
@@ -1231,7 +1228,7 @@ module receiver(input logic bit_in, rst_L, clk, pause, clear_data, clear_crc,
 	receiverFSM get(clk,rst_L,pause,(clear_data&&clear_crc),shift_it,check_it);
 	assign msg_out = temp;
 	always_comb begin // check ok signal
-		if(check_it) msg_ok = (Q == 16'h8005) ? 1'b1: 1'b0;
+		if(check_it) msg_ok = (Q == 16'h800D) ? 1'b1: 1'b0;
 		else msg_ok =1'b0;
 		done = check_it;
 	end	
@@ -1240,7 +1237,7 @@ module receiver(input logic bit_in, rst_L, clk, pause, clear_data, clear_crc,
 			temp <= 64'b0;
 		else if (clear_data&&clear_crc)
 			temp <= 64'd0;
-		else if (shift_it) begin //shift signal control for first 11 shift by FSM
+		else if (shift_it) begin //shift signal control for first 64 shift by FSM
 			temp[63:1] <=temp[62:0];
 			temp[0] <= bit_in;
 			end
@@ -1273,7 +1270,7 @@ always_comb begin
 				end
 			end
 		COMP: begin
-					ns = (counter>=7'd80)? DEAD: COMP;
+					ns = (counter>=7'd79)? DEAD: COMP;
 					end
 		DEAD: begin
 					ns = DOWN;
@@ -1301,7 +1298,6 @@ always_ff @(posedge clk, negedge rst_L) begin
 			counter <= counter + 7'b0001;
 			end
 	end
-
 endmodule:receiverFSM
 
 /*****RECEIVE_DATA FSM*****/
