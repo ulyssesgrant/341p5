@@ -976,7 +976,7 @@ module top_fsm (input logic clk, rst_L,
 		remember_new = 2'b0;
 		clr_remember =1'b0;
 		ld_remember = 1'b0;
-		mode = 2'b3;
+		mode = 2'd3;
 		case(cs)
 			IDLE :begin
 				if(start) begin
@@ -984,7 +984,7 @@ module top_fsm (input logic clk, rst_L,
 					start_send_token =1'b1; // start the first fsm.
 					if(read_write)begin // write
 						pid_reg = 8'b1000_0111;
-						mode = 2b0;
+						mode = 2'd0;
 					end
 					else begin// read, has different pid.
 						pid_reg = 8'b1001_0110;
