@@ -47,9 +47,9 @@ module receive_acknak(input logic clk, rst_L, receive_hand,
 			READPID: begin
 				pid_add = 1;
 				if (pidDone) begin
-					if (pid == 4'b0010)
+					if (pid == 4'b0010) //ack
 						ns = WAITEOP1;
-					else if (pid == 4'b1010)
+					else if (pid == 4'b1010) //nak
 						ns = WAITEOP2;
 				end
 				ns = pidDone ? READDATA : READPID;
