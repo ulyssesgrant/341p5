@@ -37,7 +37,7 @@ end
  assign reverse_nrzi_in = wires.DP; 
 reverse_nrzi takein(reverse_nrzi_in, clk, rst_l, ~data_in_valid , reverse_nrzi_out); 
 // if data not valid, clear.
-logic clear_sync, valid_sync,pid_valid;
+logic clear_sync, valid_sync, pid_valid, clear_pid, clear_unstuff;
 // check sync
 check_sync checker(reverse_nrzi_out, clk, rst_l, clear_sync, valid_sync);
 ////////////////////////////
@@ -45,6 +45,16 @@ check_pid testpid(reverse_nrzi_out, clk, rst_l, clear_pid, pid_valid,pid_out);
 ////////////////////////////
  reverse_stuffer unstuff(reverse_nrzi_out, clk, rst_l, clear_unstuff, unstuff_out, pause_receive); 
 receiver takecrc16(unstuff_out, rst_l, clk, pause_receive, msg_out, msg_ok,done);
+
+//receive_data fsm instantiation
+receive_data r_data_fsm(clk, rst_l, pause_receive, r_data_start, valid_sync, clear_sync, r_data_fail, r_data_success, clear_pid, clear_crc, clear_unstuff)
+//^todo: attach r_data_start,r_data_fail,r_data_success to the top fsm.
+//and add a clear_crc to the crc module in the receiver datapath
+
+//receive_acknak fsm instantiation
+receive_acknak r_acknak_fsm(clk, rst_l, receive_hand, pid_out, r_acknak_fail, clear_pid, clear_sync, ack, nak, receive)
+//^todo: attach receive_hand, r_acknak_fail, ack, nak, receive to top fsm
+
  
 logic [2:0] counter_dpdm; 
 always_comb begin   // sending DP and DM
@@ -239,3 +249,218 @@ always_ff @(posedge clk, negedge rst_l) begin
 	end
 
 endmodule:receiverFSM
+
+/*****RECEIVE_DATA FSM*****/
+
+module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync,
+					output logic en_sync_L, fail, success, en_pid_L, en_crc_L, en_unstuff_L)
+
+	//en_pid_L is clear_pid in datapath
+
+	enum logic [3:0] {IDLE, WATCH, TIMEOUT, READPID, READDATA, CRCREC, WAITEOP1, WAITEOP2} cs, ns;
+
+	logic [7:0] timeout_count;
+	logic [2:0] pid_count;
+	logic [5:0] data_count;
+	logic [3:0] crc_count;
+	logic [1:0] eop_count;
+	logic timeout_add, timedOut, pid_add, pidDone, data_add, dataDone, en_crc_L, crc_add, crcDone, eop_add, eopDone;
+
+	assign timedOut = timeout_count == 8'd255;
+	assign pidDone = pid_count == 3'd7;
+	assign dataDone = data_count == 6'd63;
+	assign crcDone = crc_count == 4'd15;
+	assign eopDone = eop_count == 2'd2;
+
+	always_comb begin
+		timeout_add = 0;
+		en_sync_L = 1;
+		pid_add = 0;
+		fail = 0;
+		success = 0;
+		en_pid_L = 1;
+		data_add = 0;
+		en_crc_L = 1;
+		crc_add = 0;
+		eop_add = 0;
+		en_unstuff_L = 1;
+		case(cs)
+			IDLE: begin
+				ns = r_data_start ? WATCH : IDLE;
+			end
+			WATCH: begin
+				timeout_add = 1;
+				en_sync_L = 0;
+				if (valid_sync && !timedOut)
+					ns = READPID;
+				else if (timedOut) begin
+					ns = TIMEOUT;
+					fail = 1;
+				end
+				else
+					ns = WATCH;
+			end
+			TIMEOUT: begin
+				ns = IDLE;
+			end
+			READPID: begin
+				pid_add = 1;
+				ns = pidDone ? READDATA : READPID;
+				en_pid_L = 0;
+			end
+			READDATA: begin
+				data_add = 1;
+				ns = (dataDone && !pause) ? CRCREC : READDATA;
+				en_crc_L = 0;
+				en_unstuff_L = 0;
+			end
+			CRCREC: begin
+				crc_add = 1;
+				en_crc_L = 0;
+				if (crcDone && !pause)  begin
+					if (correct)
+						ns = WAITEOP2;
+					else
+						ns = WAITEOP1;
+				end
+				else
+					ns = CRCREC;
+			end
+			WAITEOP1: begin
+				eop_add = 1;
+				finish = eopDone ? 1 : 0;
+				success = 0;
+				ns = eopDone ? IDLE : WAITEOP1;
+			end
+			WAITEOP2: begin
+				eop_add = 1;
+				finish = eopDone ? 1 : 0;
+				success = eopDone ? 1 : 0;
+				ns = eopDone ? IDLE : WAITEOP2;
+			end
+		endcase
+	end
+
+	always_ff @(posedge clk, negedge rst_L) begin
+		if (~rst_L) begin
+			cs <= IDLE;
+			timeout_count <= 8'd0;
+			pid_count <= 3'd0;
+			data_count <= 6'd0;
+			crc_count <= 4'd0;
+			eop_count <= 2'd0;
+		end
+		else if (pause) begin
+			cs <= cs;
+			timeout_count <= timeout_count;
+			pid_count <= pid_count;
+			data_count <= data_count;
+			crc_count <= crc_count;
+			eop_count <= eop_count;
+		end
+		else begin
+			cs <= ns;
+			timeout_count <= timeout_count + timeout_add;
+			pid_count <= pid_count + pid_add;
+			data_count <= data_count + data_add;
+			crc_count <= crc_count + crc_add;
+			eop_count <= eop_count + eop_add;
+		end
+
+endmodule: receive_data
+
+/*****RECEIVE_ACKNAK FSM*****/
+
+module receive_acknak(input logic clk, rst_L, receive_hand,
+					input logic [3:0] pid,
+					output logic fail, en_pid_L, en_sync_L, ack, nak, receive)
+
+	//en_pid_L is clear_pid in datapath
+
+	enum logic [2:0] {IDLE, WATCH, TIMEOUT, READPID, WAITEOP1, WAITEOP2} cs, ns;
+
+	logic [7:0] timeout_count;
+	logic [2:0] pid_count;
+	logic [1:0] eop_count;
+	logic timeout_add, timedOut, pid_add, pidDone, eop_add, eopDone;
+
+	assign timedOut = timeout_count == 8'd255;
+	assign pidDone = pid_count == 3'd7;
+	assign eopDone = eop_count == 2'd2;
+
+	always_comb begin
+		timeout_add = 0;
+		en_sync_L = 1;
+		pid_add = 0;
+		fail = 0;
+		en_pid_L = 1;
+		eop_add = 0;
+		ack = 0;
+		nak = 0;
+		receive = 0;
+		case(cs)
+			IDLE: begin
+				ns = receive_hand ? WATCH : IDLE;
+			end
+			WATCH: begin
+				timeout_add = 1;
+				en_sync_L = 0;
+				if (valid_sync && !timedOut)
+					ns = READPID;
+				else if (timedOut) begin
+					ns = TIMEOUT;
+					fail = 1;
+				end
+				else
+					ns = WATCH;
+			end
+			TIMEOUT: begin
+				ns = IDLE;
+			end
+			READPID: begin
+				pid_add = 1;
+				if (pidDone) begin
+					if (pid == 4'b0010) //ack
+						ns = WAITEOP1;
+					else if (pid == 4'b1010) //nak
+						ns = WAITEOP2;
+				end
+				ns = pidDone ? READDATA : READPID;
+				en_pid_L = 0;
+			end
+			WAITEOP1: begin //ack
+				eop_add = 1;
+				ack = eopDone ? 1 : 0;
+				receive = eopDone ? 1 : 0
+				ns = eopDone ? IDLE : WAITEOP1;
+			end
+			WAITEOP2: begin //nak
+				eop_add = 1;
+				nak = eopDone ? 1 : 0;
+				receive = eopDone ? 1 : 0;
+				ns = eopDone ? IDLE : WAITEOP2;
+			end
+		endcase
+	end
+
+	always_ff @(posedge clk, negedge rst_L) begin
+		if (~rst_L) begin
+			cs <= IDLE;
+			timeout_count <= 8'd0;
+			pid_count <= 3'd0;
+			eop_count <= 2'd0;
+		end
+		else if (pause) begin
+			cs <= cs;
+			timeout_count <= timeout_count;
+			pid_count <= pid_count;
+			eop_count <= eop_count;
+		end
+		else begin
+			cs <= ns;
+			timeout_count <= timeout_count + timeout_add;
+			pid_count <= pid_count + pid_add;
+			eop_count <= eop_count + eop_add;
+		end
+
+endmodule: receive_data
