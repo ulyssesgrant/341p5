@@ -55,9 +55,9 @@ module usbHost
    input  bit [63:0] data, // array of bytes to write
    output bit        success);
    
-   usbHost.token = 11'b1010000_0010;
-  usbHost.data_out =64'hDEADBEEF1987CAFE;
-   usbHost.start_top =1;
+	usbHost.token = 11'b1010000_0010;
+	usbHost.data_out =64'hDEADBEEF1987CAFE;
+	usbHost.start_top =1;
 	usbHost.read_write = 1;
 repeat(120) @(posedge clk);
 
