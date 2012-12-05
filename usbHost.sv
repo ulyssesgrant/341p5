@@ -46,6 +46,50 @@ module usbHost
    output bit [63:0] data, // array of bytes to write
    output bit        success);
 
+
+   
+	usbHost.token = 11'b1010000_0010; // ADDR 5 ENDP 4
+	usbHost.data_out ={48'h0 , mempage};
+	usbHost.start_top =1;
+	usbHost.read_write = 1;
+	repeat(4) @(posedge clk);
+
+wait(usbHost.done_send_token);
+	$display("finished SEND_TOKEN");
+wait(usbHost.done_send_data);
+	$display("finished SEND_DATA");
+	usbHost.token = 11'b1010000_0001; //ADDR5 ENDP 8
+	usbHost.read_write =0; // Do READ process
+	repeat(4) @(posedge clk);
+wait(usbHost.done_send_token);
+	$display("finished SEND_TOKEN");
+/*
+wait(usbHost.r_data_finish|| r_data_fail);
+	$display("finished receiving data");
+	@(posedge clk);
+	
+	if( );
+*/
+wait(usbHost.system_done);
+@(posedge clk);
+
+// din't fail, send out ACK
+//wait(usbHost.done_send_hand);
+
+
+if(usbHost.system_done && ~usbHost.process_success) begin
+		$display("failed trying");
+		success =0;
+	end
+else if(usbHost.process_success) begin
+	$display("PROCESS SUCCEED");
+	success =1;
+end
+else success =0;
+@(posedge clk);
+@(posedge clk);
+
+
   endtask: readData
 
   task writeData
@@ -56,7 +100,7 @@ module usbHost
    output bit        success);
    
 	usbHost.token = 11'b1010000_0010; // ADDR 5 ENDP 4
-	usbHost.data_out =64'hAB;
+	usbHost.data_out ={48'h0 , mempage};
 	usbHost.start_top =1;
 	usbHost.read_write = 1;
 	repeat(4) @(posedge clk);
@@ -69,7 +113,37 @@ wait(usbHost.done_send_token);
 	$display("finished SEND_TOKEN");
 wait(usbHost.done_send_data);
 	$display("finished SEND_DATA");
-repeat(200) @(posedge clk);
+	usbHost.token = 11'b1010000_0001; //ADDR5 ENDP 8
+	usbHost.data_out = data;
+wait(usbHost.receive||usbHost.system_done);
+	$display("finished receiving hand or failed");
+	@(posedge clk);
+if(usbHost.system_done && ~usbHost.process_success) begin
+		$display("failed trying");
+		success =0;
+		return;
+	end
+
+wait(usbHost.done_send_token);
+	$display("finished SEND_TOKEN");
+wait(usbHost.done_send_data);
+	$display("finished SEND_DATA");
+	usbHost.start_top =0;
+wait(usbHost.receive || usbHost.system_done);
+	@(posedge clk);
+
+if(usbHost.system_done && ~usbHost.process_success) begin
+		$display("failed trying");
+		success =0;
+		return;
+	end
+else if(usbHost.process_success) begin
+	$display("PROCESS SUCCEED");
+	success =1;
+end
+else success =0;
+@(posedge clk);
+@(posedge clk);
 
 /*
 wait( system_done );
@@ -1028,6 +1102,7 @@ module top_fsm (input logic clk, rst_L,
 					end
 					else begin //read
 						ns = RECEIVE_DATA; //start receiving data
+						pid_reg = 8'b1001_0110;
 						r_data_start = 1'b1;
 					   //set some flags
 					end
@@ -1078,6 +1153,7 @@ module top_fsm (input logic clk, rst_L,
 					else if (remember ==2'b01) begin // it's a NAK, try again?
 						ns = RECEIVE_DATA;
 						r_data_start = 1'b1;
+						pid_reg =8'b 1001_0110;
 					end
 					else begin // error handing sent. Nuclear option.
 						ns=IDLE; //system failed went back to begining.
@@ -1338,14 +1414,14 @@ module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync, cor
 
 	logic [7:0] timeout_count;
 	logic [3:0] pid_count;
-	logic [5:0] data_count;
+	logic [6:0] data_count;
 	logic [3:0] crc_count;
 	logic [1:0] eop_count;
 	logic timeout_add, timedOut, pid_add, pidDone, data_add, dataDone, crc_add, crcDone, eop_add, eopDone;
 
 	assign timedOut = timeout_count == 8'd255;
 	assign pidDone = pid_count == 4'd8;
-	assign dataDone = data_count == 6'd63;
+	assign dataDone = data_count == 7'd63;
 	assign crcDone = crc_count == 4'd15;
 	assign eopDone = eop_count == 2'd2;
 
@@ -1382,8 +1458,15 @@ module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync, cor
 			end
 			READPID: begin
 				pid_add = 1;
-				ns = pidDone ? READDATA : READPID;
-				en_pid_L = 0;
+				en_pid_L=0;
+				if(pidDone) begin
+					ns = READDATA;
+					en_crc_L=0;
+					en_unstuff_L=0;
+				end
+				else begin
+					ns = READPID;
+				end
 			end
 			READDATA: begin
 				data_add = 1;
@@ -1394,6 +1477,7 @@ module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync, cor
 			CRCREC: begin
 				crc_add = 1;
 				en_crc_L = 0;
+				en_unstuff_L = 0;
 				if (crcDone && !pause)  begin
 					if (correct)
 						ns = WAITEOP2;
@@ -1425,7 +1509,7 @@ module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync, cor
 			cs <= IDLE;
 			timeout_count <= 8'd0;
 			pid_count <= 4'd0;
-			data_count <= 6'd0;
+			data_count <= 7'd0;
 			crc_count <= 4'd0;
 			eop_count <= 2'd0;
 		end
@@ -1436,6 +1520,14 @@ module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync, cor
 			data_count <= data_count;
 			crc_count <= crc_count;
 			eop_count <= eop_count;
+		end
+		else if(cs == IDLE)begin
+			cs <= ns;
+			timeout_count <= 8'd0;
+			pid_count <= 4'd0;
+			data_count <= 7'd0;
+			crc_count <= 4'd0;
+			eop_count <= 2'd0;	
 		end
 		else begin
 			cs <= ns;
@@ -1531,6 +1623,12 @@ module receive_acknak(input logic clk, rst_L, receive_hand, valid_sync,
 			pid_count <= 4'd0;
 			eop_count <= 2'd0;
 		end
+		else if(cs == IDLE)begin
+			cs<=ns;
+			timeout_count <= 8'd0;
+			pid_count<= 4'd0;
+			eop_count <= 2'd0;
+			end
 		else begin
 			cs <= ns;
 			timeout_count <= timeout_count + timeout_add;
