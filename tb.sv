@@ -27,7 +27,7 @@ module test
 // Host sends data to the device to be printed
 ///////////////////////////////////////////////////////////////////////////////
     flash_addr = 8'hAB;
-    flash_data = 64'h10_10_10_10_10_10_10_10;
+    flash_data = 64'hCAFEBABEDEADBEEF;
     
     // Read Data
     @(posedge clk);
@@ -66,6 +66,8 @@ usbHost.shiftRegSync.val, usbHost.sync_pid_out,usbHost.pid_out,usbHost.stuffer_o
 	//$monitor($stime,, "sync_out=%b,pid_out=%b",usbHost.sync_out,usbHost.pid_out);
 	host.writeData(flash_addr,flash_data,success);
 	host.readData(flash_addr,flash_data_out,success);
+	repeat(200)@(posedge clk);
+	//host.readData(flash_addr+1,flash_data_out,success);
     //host.prelabRequest(flash_data);
     @(posedge clk);
 		$display("\n");

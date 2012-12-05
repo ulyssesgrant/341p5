@@ -47,7 +47,7 @@ module usbHost
    output bit        success);
 
 
-   
+	data = 64'b0;   
 	usbHost.token = 11'b1010000_0010; // ADDR 5 ENDP 4
 	usbHost.data_out ={48'h0 , mempage};
 	usbHost.start_top =1;
@@ -72,6 +72,7 @@ wait(usbHost.r_data_finish|| r_data_fail);
 */
 wait(usbHost.system_done);
 @(posedge clk);
+usbHost.start_top =0;
 
 // din't fail, send out ACK
 //wait(usbHost.done_send_hand);
@@ -83,10 +84,10 @@ if(usbHost.system_done && ~usbHost.process_success) begin
 	end
 else if(usbHost.process_success) begin
 	$display("PROCESS SUCCEED");
+	data = usbHost.msg_data;
 	success =1;
 end
 else success =0;
-@(posedge clk);
 @(posedge clk);
 
 
@@ -100,7 +101,7 @@ else success =0;
    output bit        success);
    
 	usbHost.token = 11'b1010000_0010; // ADDR 5 ENDP 4
-	usbHost.data_out ={48'h0 , mempage};
+	usbHost.data_out = 64'h00_00_00_00_00_00_00_AB;  //{48'h0 , mempage};
 	usbHost.start_top =1;
 	usbHost.read_write = 1;
 	repeat(4) @(posedge clk);
@@ -142,7 +143,6 @@ else if(usbHost.process_success) begin
 	success =1;
 end
 else success =0;
-@(posedge clk);
 @(posedge clk);
 
 /*
@@ -230,8 +230,9 @@ always_ff @(posedge clk, negedge rst_L) begin
 	else counter_eop <= 3'd0;
 end
  /////////////////////////////////////////////////////////////////////
- logic [63:0] msg_out;
+ logic [63:0] msg_out, msg_data;
  logic [3:0] check_pid_out;
+ logic ld_msg;
  logic msg_ok, done, receive, receive_hand, r_acknak_fail, ack, nak;
  logic r_data_start, r_data_finish, r_data_fail, r_data_success, pause_receive;
  logic process_success, system_done;
@@ -249,7 +250,9 @@ check_pid testpid(reverse_nrzi_out, clk, rst_L, (clear_pid1&&clear_pid2), pid_va
 receiver takecrc16(unstuff_out, rst_L, clk, pause_receive, clear_unstuff, clear_crc, msg_out, msg_ok,done);
 
 //receive_data fsm instantiation
-receive_data r_data_fsm(clk, rst_L, pause_receive, r_data_start, valid_sync, msg_ok, clear_sync1, r_data_finish, r_data_fail, r_data_success, clear_pid1, clear_crc, clear_unstuff);
+receive_data r_data_fsm(clk, rst_L, pause_receive, r_data_start, valid_sync,
+msg_ok, clear_sync1, r_data_finish, r_data_fail, r_data_success, clear_pid1,
+clear_crc, clear_unstuff,ld_msg);
 
 //receive_acknak fsm instantiation
 receive_acknak r_acknak_fsm(clk, rst_L, receive_hand, valid_sync, check_pid_out, r_acknak_fail, clear_pid2, clear_sync2, ack, nak, receive);
@@ -307,6 +310,11 @@ shiftRegister #(8) shiftRegPid(clk, rst_L, ld_pid, en_pid, 1'd0, pid, pid_out);
 shiftRegister #(64) shiftRegData(clk, rst_L, ld_data_data, en_data_data, pause, data_out, crc16_in);
 
 
+always_ff@(posedge clk, negedge rst_L) begin
+	if(~rst_L) msg_data <= 64'b0;
+	else if(ld_msg) msg_data<=msg_out;
+	else msg_data<= msg_data;
+end
 ///////////////////////////////////////////////////////////////
 stuffer   bitstuff(stuffer_in, clk, rst_L, clear_stuffer, stuffer_out, pause);  // stuff addr, endp,crc5,crc16, and DATA
 ///////////////////////////////////////////////////////////////
@@ -1340,7 +1348,7 @@ module receiver(input logic bit_in, rst_L, clk, pause, clear_data, clear_crc,
 			temp <= 64'b0;
 		else if (clear_data&&clear_crc)
 			temp <= 64'd0;
-		else if (shift_it) begin //shift signal control for first 64 shift by FSM
+		else if (shift_it && ~pause) begin //shift signal control for first 64 shift by FSM
 			temp[63:1] <=temp[62:0];
 			temp[0] <= bit_in;
 			end
@@ -1406,7 +1414,8 @@ endmodule:receiverFSM
 /*****RECEIVE_DATA FSM*****/
 
 module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync, correct,
-					output logic en_sync_L, finish, fail, success, en_pid_L, en_crc_L, en_unstuff_L);
+					output logic en_sync_L, finish, fail, success, en_pid_L,
+					en_crc_L, en_unstuff_L,ld_msg);
 
 	//en_pid_L is clear_pid in datapath
 
@@ -1426,6 +1435,7 @@ module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync, cor
 	assign eopDone = eop_count == 2'd2;
 
 	always_comb begin
+		ld_msg =0;
 		timeout_add = 0;
 		en_sync_L = 1;
 		pid_add = 0;
@@ -1475,6 +1485,7 @@ module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync, cor
 				en_unstuff_L = 0;
 			end
 			CRCREC: begin
+				ld_msg =1;
 				crc_add = 1;
 				en_crc_L = 0;
 				en_unstuff_L = 0;
