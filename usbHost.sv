@@ -60,12 +60,15 @@ module usbHost
 	usbHost.start_top =1;
 	usbHost.read_write = 1;
 	repeat(4) @(posedge clk);
+	
 	/*
 	usbHost.token <= 11'b1010000_0001; //ADDR5 ENDP 8
 	*/
-wait(usbHost.done_send_token);
-	$display("passed first stage");
 	
+wait(usbHost.done_send_token);
+	$display("finished SEND_TOKEN");
+wait(usbHost.done_send_data);
+	$display("finished SEND_DATA");
 repeat(200) @(posedge clk);
 
 /*
@@ -1220,10 +1223,10 @@ module check_pid(input logic bit_in, clk, rst_L, clear,
 always_comb begin
 	if(holder[3:0] == ~(holder[7:4])) begin
 			pid_valid = 1'b1;   
-			Q[0] = holder[4];  // register = 1011_0100
-			Q[1] = holder[5];  // send out 1101
-			Q[2] = holder[6];
-			Q[3] = holder[7];
+			Q[3] = holder[4];  // register = 1011_0100
+			Q[2] = holder[5];  // send out 1101
+			Q[1] = holder[6];
+			Q[0] = holder[7];
 	end
 	else begin
 		Q =0;
