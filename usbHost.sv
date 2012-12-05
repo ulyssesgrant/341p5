@@ -55,9 +55,9 @@ module usbHost
    input  bit [63:0] data, // array of bytes to write
    output bit        success);
    
-   usbHost.token = 11'b1010000_0010; // ADDR 5 ENDP 4
-  usbHost.data_out =64'hAB;
-   usbHost.start_top =1;
+	usbHost.token = 11'b1010000_0010; // ADDR 5 ENDP 4
+	usbHost.data_out =64'hAB;
+	usbHost.start_top =1;
 	usbHost.read_write = 1;
 	repeat(4) @(posedge clk);
 	/*
@@ -1334,14 +1334,14 @@ module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync, cor
 	enum logic [3:0] {IDLE, WATCH, TIMEOUT, READPID, READDATA, CRCREC, WAITEOP1, WAITEOP2} cs, ns;
 
 	logic [7:0] timeout_count;
-	logic [2:0] pid_count;
+	logic [3:0] pid_count;
 	logic [5:0] data_count;
 	logic [3:0] crc_count;
 	logic [1:0] eop_count;
 	logic timeout_add, timedOut, pid_add, pidDone, data_add, dataDone, crc_add, crcDone, eop_add, eopDone;
 
 	assign timedOut = timeout_count == 8'd255;
-	assign pidDone = pid_count == 3'd7;
+	assign pidDone = pid_count == 4'd8;
 	assign dataDone = data_count == 6'd63;
 	assign crcDone = crc_count == 4'd15;
 	assign eopDone = eop_count == 2'd2;
@@ -1421,7 +1421,7 @@ module receive_data(input logic clk, rst_L, pause, r_data_start, valid_sync, cor
 		if (~rst_L) begin
 			cs <= IDLE;
 			timeout_count <= 8'd0;
-			pid_count <= 3'd0;
+			pid_count <= 4'd0;
 			data_count <= 6'd0;
 			crc_count <= 4'd0;
 			eop_count <= 2'd0;
@@ -1457,12 +1457,12 @@ module receive_acknak(input logic clk, rst_L, receive_hand, valid_sync,
 	enum logic [2:0] {IDLE, WATCH, TIMEOUT, READPID, WAITEOP1, WAITEOP2} cs, ns;
 
 	logic [7:0] timeout_count;
-	logic [2:0] pid_count;
+	logic [3:0] pid_count;
 	logic [1:0] eop_count;
 	logic timeout_add, timedOut, pid_add, pidDone, eop_add, eopDone;
 
 	assign timedOut = timeout_count == 8'd255;
-	assign pidDone = pid_count == 3'd7;
+	assign pidDone = pid_count == 4'd8;
 	assign eopDone = eop_count == 2'd2;
 
 	always_comb begin
@@ -1525,7 +1525,7 @@ module receive_acknak(input logic clk, rst_L, receive_hand, valid_sync,
 		if (~rst_L) begin
 			cs <= IDLE;
 			timeout_count <= 8'd0;
-			pid_count <= 3'd0;
+			pid_count <= 4'd0;
 			eop_count <= 2'd0;
 		end
 		else begin
