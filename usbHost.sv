@@ -15,7 +15,7 @@ module usbHost
   (input bit  [15:0] data);
   
   usbHost.token = 11'b1010000_0010;
-  usbHost.data_out =64'hDEADBEEF1987CAFE;
+  usbHost.data_out =64'hAB;
   
   /*
   usbHost.mode = 2'd0;
@@ -55,11 +55,18 @@ module usbHost
    input  bit [63:0] data, // array of bytes to write
    output bit        success);
    
-	usbHost.token = 11'b1010000_0010;
-	usbHost.data_out =64'hDEADBEEF1987CAFE;
-	usbHost.start_top =1;
+   usbHost.token = 11'b1010000_0010; // ADDR 5 ENDP 4
+  usbHost.data_out =64'hAB;
+   usbHost.start_top =1;
 	usbHost.read_write = 1;
-repeat(120) @(posedge clk);
+	repeat(4) @(posedge clk);
+	/*
+	usbHost.token <= 11'b1010000_0001; //ADDR5 ENDP 8
+	*/
+wait(usbHost.done_send_token);
+	$display("passed first stage");
+	
+repeat(200) @(posedge clk);
 
 /*
 wait( system_done );
@@ -189,7 +196,7 @@ mux4ways#(1)  mux1(mode, do_eop_token,do_eop_data,do_eop_hand, 1'b0 ,do_eop),
 					   mux9(mode, ld_tok_token, 1'b0, 1'b0,1'b0, ld_tok),
 					   mux10(mode, sel_1_token, sel_1_data, sel_1_hand,1'bz, sel_1),
 					   mux11(mode, sel_2_token, sel_2_data, sel_2_hand, 1'bz,sel_2),
-					   mux12(mode, enable_send_token, enable_send_data, enable_send_hand,1'bz,enable_send),
+					   mux12(mode, enable_send_token, enable_send_data, enable_send_hand,1'b0,enable_send),
 					   mux13(mode, clear_stuffer_token, clear_stuffer_data, 1'b1,1'bz,clear_stuffer);
 always_comb begin
 	case(mode)
@@ -240,7 +247,7 @@ nrzi    flip(nrzi_in, start, clk, rst_L, clear, nrzi_out);
   // small handler to send out DP and DM. use do_eop to control between NRZI output and EOP.
  logic [2:0] counter_dpdm; 
 always_comb begin   // sending DP and DM
-	if (do_eop) begin
+	if (do_eop || (counter_dpdm != 3'b0)) begin
 		if (counter_dpdm == 3'd2) begin
 			{wiresDP,wiresDM} = 2'b10;
 		end
@@ -677,7 +684,6 @@ always_comb begin
 				ns = IDLE;
 				done = 1'b1;
 				clear_counter =1'b1;
-				
 			end
 		end
 	endcase
@@ -787,7 +793,6 @@ always_comb begin
 				ns = IDLE;
 				done = 1'b1;
 				clear_counter =1'b1;
-				
 			end
 		end
 	endcase
@@ -821,7 +826,8 @@ end
 	end
 endmodule: send_ack_nak
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+//                                      SEND_DATA                                            //
+//////////////////////////////////////////////////////////////////////////////////////////////////////////
 module send_data(input logic clk, rst_L, start, pause,
 							 output logic do_eop,en_sync,en_crc_L, en_pid, en_data, clear, ld_sync, ld_pid,ld_data, sel_1,sel_2,enable_send, clear_stuffer,
 							 output logic done); // done signal sends to above.
@@ -854,6 +860,7 @@ always_comb begin
 	case(cs)
 		IDLE :begin
 				if(start) begin
+					enable_send =1'b1;
 					ns = SYNC;
 					ld_sync = 1'b1;
 					ld_pid =1'b1;
@@ -896,14 +903,17 @@ always_comb begin
 			data_add =1'b1;
 			enable_send =1'b1;
 			if(data_count <7'd63) en_data =1'b1;
-			else en_data = 1'b0;
-			if(data_count < 7'd79) begin
-			ns = DATA;
+			else if(data_count < 7'd79) begin
+				ns = DATA;
+				en_data = 1'b0;
 			end
-			else ns = EOP;
+			else begin
+				ns = EOP;
+				en_data = 1'b0;
+			end
 		end
 		EOP: begin
-			clear = 1'b0;
+			clear = 1'b1;
 			en_crc_L =1'b1;
 			do_eop  = 1'b1;
 			eop_add =1'b1;
@@ -915,7 +925,6 @@ always_comb begin
 				ns = IDLE;
 				done = 1'b1;
 				clear_counter =1'b1;
-				
 			end
 		end
 	endcase
@@ -933,8 +942,8 @@ end
 			cs <=ns;
 			sync_count <= 5'b0;
 			pid_count <= 5'b0;
-			data_count <= 5'b0;
-			eop_count <= 7'b0;
+			data_count <= 7'b0;
+			eop_count <= 5'b0;
 		end
 		else if(pause) begin
 			cs <=cs;
