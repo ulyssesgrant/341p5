@@ -54,6 +54,18 @@ module usbHost
   (input  bit [15:0]  mempage, // Page to write
    input  bit [63:0] data, // array of bytes to write
    output bit        success);
+   
+   usbHost.token = 11'b1010000_0010;
+  usbHost.data_out =64'hDEADBEEF1987CAFE;
+   usbHost.start_top =1;
+	usbHost.read_write = 1;
+repeat(120) @(posedge clk);
+
+/*
+wait( system_done );
+if (process_success)
+   
+   */   
 
   endtask: writeData
 
@@ -159,7 +171,6 @@ receive_data r_data_fsm(clk, rst_L, pause_receive, r_data_start, valid_sync, msg
 receive_acknak r_acknak_fsm(clk, rst_L, receive_hand, valid_sync, check_pid_out, r_acknak_fail, clear_pid2, clear_sync2, ack, nak, receive);
 
 //////////   RECEIVES MAGIC BLOCK OF CODE ENDS HERE   //////////
-
 
 /***top_fsm***/
 top_fsm topFSM(clk, rst_L, start_top, read_write, done_send_token, done_send_data, done_send_hand, receive, ack, nak, r_acknak_fail, r_data_finish, 
@@ -606,11 +617,11 @@ always_comb begin
 		IDLE :begin
 				if(start) begin
 					ns = SYNC;
-					ld_sync <= 1'b1;
-					ld_pid <=1'b1;
-					ld_tok <= 1'b1;
-					sel_1 <=1'b1;
-					sel_2<=1'b0;
+					ld_sync = 1'b1;
+					ld_pid =1'b1;
+					ld_tok = 1'b1;
+					sel_1 =1'b1;
+					sel_2=1'b0;
 					end
 				else ns = IDLE;    // wait for start signal. 
 		end
@@ -654,7 +665,7 @@ always_comb begin
 			else ns = EOP;
 		end
 		EOP: begin
-			clear = 1'b0;
+			clear = 1'b1;
 			en_crc_L =1'b1;
 			do_eop  = 1'b1;
 			eop_add =1'b1;
@@ -733,10 +744,10 @@ always_comb begin
 		IDLE :begin
 			if(start) begin
 				ns = SYNC;
-				ld_sync <= 1'b1;
-				ld_pid <=1'b1;
-				sel_1 <=1'b1;
-				sel_2<=1'b0;
+				ld_sync = 1'b1;
+				ld_pid =1'b1;
+				sel_1 =1'b1;
+				sel_2=1'b0;
 				end
 			else ns = IDLE;    // wait for start signal. 
 		end
@@ -844,11 +855,11 @@ always_comb begin
 		IDLE :begin
 				if(start) begin
 					ns = SYNC;
-					ld_sync <= 1'b1;
-					ld_pid <=1'b1;
-					ld_data <= 1'b1;
-					sel_1 <=1'b1;
-					sel_2<=1'b0;
+					ld_sync = 1'b1;
+					ld_pid =1'b1;
+					ld_data = 1'b1;
+					sel_1 =1'b1;
+					sel_2=1'b0;
 					end
 				else ns = IDLE;    // wait for start signal. 
 		end
@@ -1001,6 +1012,7 @@ module top_fsm (input logic clk, rst_L,
 						ns = SEND_DATA; // start sending data
 						start_send_data =1'b1; //start send_data fsm
 						pid_reg = 8'b1100_0011;
+						mode=2'b1;
 					end
 					else begin //read
 						ns = RECEIVE_DATA; //start receiving data
@@ -1026,6 +1038,7 @@ module top_fsm (input logic clk, rst_L,
 						ns = SEND_DATA;
 						start_send_data =1'b1; //try again
 						pid_reg = 8'b1100_0011;
+						mode=2'b1;
 					end
 					else begin
 						//give up
@@ -1068,6 +1081,7 @@ module top_fsm (input logic clk, rst_L,
 				if (r_data_fail) begin
 					if(!r_fail_done) begin
 						ns = SEND_HAND;
+						mode=2'd2;
 						start_send_hand = 1'b1;
 						pid_reg = 8'b0101_1010;
 						ld_remember = 1'b1;
@@ -1084,6 +1098,7 @@ module top_fsm (input logic clk, rst_L,
 				else if (r_data_finish && r_data_success) begin
 					ns = SEND_HAND;
 					start_send_hand =1'b1;
+					mode=2'd2;
 					pid_reg = 8'b0100_1011;
 					ld_remember = 1'b1;
 					remember_new = 2'b10; //ACK
