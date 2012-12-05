@@ -37,9 +37,14 @@ module test
     // Prelab data is purely for you to test different packets.  It is not
     // actually used in this prelab.
 	
-	$monitor($stime,, "DP=%b,DM=%b,nrzi_in=%b sync_val=%b sync_pid_out =%b pid_out=%b stuffer_out=%b,pause=%b,do_eop=%b ld_sync =%b",top.wires.DP,top.wires.DM,usbHost.nrzi_in,
-usbHost.shiftRegSync.val, usbHost.sync_pid_out,usbHost.pid_out,usbHost.stuffer_out,usbHost.pause,usbHost.do_eop, usbHost.ld_sync);
-    
+		$monitor($stime,, "DP=%b,DM=%b,nrzi_in=%b sync_val=%h ,pause=%b,do_eop=%b, receive_success =%b, top.cs =%s, ack_nak =%s, pid_in =%b pid_count=%d", top.wires.DP,top.wires.DM,usbHost.nrzi_in,
+usbHost.shiftRegSync.val, usbHost.pause,usbHost.do_eop,top.host.process_success, top.host.topFSM.cs.name, top.host.r_acknak_fsm.cs.name, top.host.r_acknak_fsm.pid, top.host.r_acknak_fsm.pid_count);
+	
+	
+	/*
+	$monitor($stime,, "DP=%b,DM=%b,nrzi_in=%b sync_val=%h sync_pid_out =%b pid_out=%b stuffer_out=%b,pause=%b,do_eop=%b ld_sync =%b receive_success =%b, top.cs =%s, ack_nak =%s",top.wires.DP,top.wires.DM,usbHost.nrzi_in,
+usbHost.shiftRegSync.val, usbHost.sync_pid_out,usbHost.pid_out,usbHost.stuffer_out,usbHost.pause,usbHost.do_eop, usbHost.ld_sync,top.host.process_success, top.host.topFSM.cs.name, top.host.r_acknak_fsm.cs.name);
+    */
 	/*
 	$monitor($stime,, "nrzi_in=%b sync_val=%b sync_pid_out =%b pid_out=%b stuffer_out=%b,pause=%b,do_eop=%b sync_count =%d pid_count=%d token_count =%d eop_count =%d",usbHost.nrzi_in,
 usbHost.shiftRegSync.val, usbHost.sync_pid_out,usbHost.pid_out,usbHost.stuffer_out,usbHost.pause,usbHost.do_eop,top.host.handle_token.sync_count,top.host.handle_token.pid_count,
