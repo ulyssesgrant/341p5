@@ -61,6 +61,10 @@ wait(usbHost.done_send_data);
 	usbHost.token = 11'b1010000_0001; //ADDR5 ENDP 8
 	usbHost.read_write =0; // Do READ process
 	repeat(4) @(posedge clk);
+wait(usbHost.receive||usbHost.system_done);
+	$display("finished receiving hand or failed");
+
+
 wait(usbHost.done_send_token);
 	$display("finished SEND_TOKEN");
 /*
@@ -101,7 +105,7 @@ else success =0;
    output bit        success);
    
 	usbHost.token = 11'b1010000_0010; // ADDR 5 ENDP 4
-	usbHost.data_out = 64'h00_00_00_00_00_00_00_AB;  //{48'h0 , mempage};
+	usbHost.data_out = {48'h0 , mempage};
 	usbHost.start_top =1;
 	usbHost.read_write = 1;
 	repeat(4) @(posedge clk);
@@ -294,7 +298,7 @@ assign wires.DM = enable_send ? wiresDM : 1'bz;
 
 ///////////////////////////////CRC machines
 sender crcSender(crc_in, rst_L, clk, clear_sender ,pause, crc_out);
-sender16 crcSender16(crc16_in, rst_L, clk, clear_sender ,pause, crc16_out);
+sender16 crcSender16(crc16_in, rst_L, clk,clear_sender ,pause, crc16_out);
 //for now: crcSender's output is tied to bitstuffer's input, but should implement mux with crc16's output later!
 assign stuffer_in = sel_3 ? crc16_out : crc_out;
 
@@ -896,12 +900,12 @@ end
 			pid_count <= 5'b0;
 			eop_count <= 5'b0;
 		end
-		else if(pause) begin
+	/*	else if(pause) begin
 			cs <=cs;
 			sync_count <= sync_count;
 			pid_count <= pid_count;
 			eop_count <= eop_count;
-		end
+		end*/
 		else begin
 			cs <=ns;
 			sync_count <= sync_count + sync_add;
@@ -1161,7 +1165,7 @@ module top_fsm (input logic clk, rst_L,
 					else if (remember ==2'b01) begin // it's a NAK, try again?
 						ns = RECEIVE_DATA;
 						r_data_start = 1'b1;
-						pid_reg =8'b 1001_0110;
+						//pid_reg =8'b 1001_0110;
 					end
 					else begin // error handing sent. Nuclear option.
 						ns=IDLE; //system failed went back to begining.
